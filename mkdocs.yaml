@@ -1,0 +1,49 @@
+site_name: Brickworks
+theme:
+  name: material
+  font:
+    text: Source Sans Pro
+  palette:
+    # Palette toggle for light mode
+    - scheme: default
+      primary: custom
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    # Palette toggle for dark mode
+    - scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - content.code.copy
+    - navigation.tabs
+    - navigation.instant
+    - navigation.instant.prefetch
+    - navigation.instant.preview
+    - navigation.instant.progress
+    - navigation.path
+    - navigation.sections
+    - navigation.top
+    - navigation.tracking
+extra_css:
+  - stylesheets/extra.css
+repo_url: https://github.com/jens-kuerten/brickworks
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - attr_list
+  - md_in_html
+  - toc
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+nav:
+  - Brickworks: index.md
+  - Concepts:
+      - Bricks: concepts/bricks.md
+      - Caching: concepts/cache.md
+      - Database Session: concepts/database_session.md
+      - Database Models: concepts/database_models.md
+      - Views Models: concepts/view_models.md
+      - Access Control: concepts/access_control.md

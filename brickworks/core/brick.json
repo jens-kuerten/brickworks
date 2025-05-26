@@ -1,0 +1,5 @@
+{
+  "routers": ["brickworks.core.routers.core_router"],
+  "middlewares": [],
+  "loadme": []
+}

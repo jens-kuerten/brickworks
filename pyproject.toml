@@ -1,0 +1,95 @@
+[project]
+name = "brickworks"
+description = "A highly opinionated framework based on FastAPI and Sqlalchemy."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "aiohttp>=3.11.18",
+    "alembic>=1.15.2",
+    "asyncpg>=0.30.0",
+    "fastapi>=0.115.12",
+    "pydantic-settings>=2.9.1",
+    "redis>=6.0.0",
+    "sqlalchemy>=2.0.40",
+    "tomli>=2.2.1",
+    "tomli-w>=1.2.0",
+    "typer>=0.16.0",
+    "uvicorn>=0.34.2",
+    "click >=8.0.0",
+    "itsdangerous>=2.2.0",
+    "authlib>=1.5.2",
+    "email-validator>=2.2.0",
+    "pyjwt>=2.10.1",
+    "httpx>=0.27.2",
+]
+dynamic = ["version"]
+
+[project.scripts]
+mason = "brickworks.mason:main"
+
+[project.entry-points."brickworks.modules"]
+brickworks_core = "brickworks.core"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+
+[tool.setuptools.packages.find]
+include = [
+    "brickworks*"
+]
+
+[tool.setuptools.package-data]
+"brickworks" = ["*", "**/*"]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = [
+    "E",    # Error codes (pycodestyle)
+    "W",    # Warning codes (pycodestyle)
+    "F",    # Pyflakes codes (logic errors, unused imports, etc.)
+    "UP",   # pyupgrade (Python syntax modernization)
+    "B",    # flake8-bugbear (likely bugs and design problems)
+    "SIM",  # flake8-simplify (simplifiable code)
+    "I",    # isort (import sorting)
+    "ASYNC",# flake8-async (async/await best practices)
+    "A",    # flake8-builtins (shadowing builtins)
+    "ANN",  # flake8-annotations (type annotation checks)
+    "C4",
+    "N",
+    "T20"
+]
+
+[tool.mypy]
+strict = true
+ignore_missing_imports = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+warn_return_any = true
+
+[dependency-groups]
+dev = [
+    "asgi-lifespan>=2.1.0",
+    "coverage>=7.8.2",
+    "httpx>=0.27.2",
+    "mkdocs>=1.6.1",
+    "mkdocs-material>=9.6.14",
+    "mypy>=1.15.0",
+    "pytest>=8.3.5",
+    "pytest-asyncio>=0.26.0",
+    "pytest-cov>=6.1.1",
+    "pytest-mock>=3.14.0",
+    "types-pyjwt>=1.7.1",
+]
+
+[tool.uv]
+package = true
+
+[build-system]
+requires = ["setuptools>=42", "setuptools_scm"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools_scm]
