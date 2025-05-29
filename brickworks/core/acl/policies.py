@@ -1,5 +1,6 @@
 from sqlalchemy import and_, select
 
+from brickworks.core import execution_context
 from brickworks.core.acl.base_policy import BasePolicy, PolicyTypeEnum
 from brickworks.core.models import BaseDBModel, UserModel
 from brickworks.core.models.base_view import BaseView
@@ -16,7 +17,7 @@ class AllowPublicAccessPolicy(BasePolicy):
 
     policy_type = PolicyTypeEnum.PERMISSIVE
 
-    async def filter(self, user_uuid: str | None, obj_class: type["BaseDBModel"] | type["BaseView"]) -> TypeWhereClause:
+    async def filter(self, obj_class: type["BaseDBModel"] | type["BaseView"]) -> TypeWhereClause:
         # evaluates to True for all records
         return AlwaysTrueWhereClause
 
@@ -29,8 +30,10 @@ class AllowActiveUserAccessPolicy(BasePolicy):
 
     policy_type = PolicyTypeEnum.PERMISSIVE
 
-    async def filter(self, user_uuid: str | None, obj_class: type["BaseDBModel"] | type["BaseView"]) -> TypeWhereClause:
-        user = await UserModel.get_one_or_none(uuid=user_uuid)
+    async def filter(self, obj_class: type["BaseDBModel"] | type["BaseView"]) -> TypeWhereClause:
+        if execution_context.user_uuid is None:
+            return AlwaysFalseWhereClause
+        user = await UserModel.get_one_or_none(uuid=execution_context.user_uuid)
         if user and user.status == UserStatusEnum.ACTIVE:
             # if the user is active we allow access to all records
             return AlwaysTrueWhereClause
@@ -50,13 +53,13 @@ class RoleAllowPolicy(BasePolicy):
         self.role_name = role_name
         self.permission = permission
 
-    async def filter(self, user_uuid: str | None, obj_class: type["BaseDBModel"]) -> TypeWhereClause:
-        if user_uuid is None:
+    async def filter(self, obj_class: type["BaseDBModel"]) -> TypeWhereClause:
+        if execution_context.user_uuid is None:
             # if no user is provided, we assume public access (which has no roles)
             return AlwaysFalseWhereClause
 
         # first we need to check if the user has the role
-        user = await UserModel.get_one_or_none(uuid=user_uuid, _apply_policies=False)
+        user = await UserModel.get_one_or_none(uuid=execution_context.user_uuid, _apply_policies=False)
         if not user or not await user.has_role(self.role_name):
             return AlwaysFalseWhereClause
 
@@ -88,12 +91,12 @@ class RoleBasedAccessPolicy(BasePolicy):
         if restrictive:
             self.policy_type = PolicyTypeEnum.RESTRICTIVE
 
-    async def filter(self, user_uuid: str | None, obj_class: type["BaseDBModel"] | type["BaseView"]) -> TypeWhereClause:
-        if user_uuid is None:
+    async def filter(self, obj_class: type["BaseDBModel"] | type["BaseView"]) -> TypeWhereClause:
+        if execution_context.user_uuid is None:
             # if no user is provided, we assume public access (which has no roles)
             return AlwaysFalseWhereClause
         # first we need to check if the user has the role
-        user = await UserModel.get_one_or_none(uuid=user_uuid, _apply_policies=False)
+        user = await UserModel.get_one_or_none(uuid=execution_context.user_uuid, _apply_policies=False)
         if not user or not await user.has_role(self.role_name):
             return AlwaysFalseWhereClause
 

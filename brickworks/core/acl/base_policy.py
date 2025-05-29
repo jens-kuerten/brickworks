@@ -42,12 +42,11 @@ class BasePolicy(ABC):
     policy_type: PolicyTypeEnum
 
     @abstractmethod
-    async def filter(self, user_uuid: str | None, obj_class: type["BaseDBModel"]) -> TypeWhereClause:
+    async def filter(self, obj_class: type["BaseDBModel"]) -> TypeWhereClause:
         """
         Return a SQLAlchemy filter clause for this policy.
 
         Args:
-            user_uuid: The UUID of the user for whom access is being checked. If None, assume public access.
             obj_class: The SQLAlchemy model class being queried.
 
         Returns:

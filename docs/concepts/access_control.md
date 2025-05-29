@@ -64,7 +64,7 @@ from apps.mybrick.models import BookModel
 class NoTolkienBooksPolicy(BasePolicy):
     policy_type = PolicyTypeEnum.RESTRICTIVE
 
-    async def filter(self, user_uuid: str | None, obj_class: type[BookModel]):
+    async def filter(self, obj_class: type[BookModel]):
         # Prevent all access to books authored by J.R.R. Tolkien
         return obj_class.author.notilike("J.R.R. Tolkien")
 ```
@@ -78,7 +78,7 @@ from apps.mybrick.models import BookModel
 class AllowHobbitBookPolicy(BasePolicy):
     policy_type = PolicyTypeEnum.PERMISSIVE
 
-    async def filter(self, user_uuid: str | None, obj_class: type[BookModel]):
+    async def filter(self, obj_class: type[BookModel]):
         # Allow access to the book titled 'The Hobbit'
         return obj_class.title == "The Hobbit"
 ```
@@ -88,6 +88,7 @@ class AllowHobbitBookPolicy(BasePolicy):
 The filter method is evaluated whenever a resource is about to be querried from the database, meaning you can change the behaviour of the filter dynamically.
 
 ```python
+from brickworks.core import execution_context
 from brickworks.core.models import UserModel
 from brickworks.core.acl.base_policy import BasePolicy, PolicyTypeEnum
 from apps.mybrick.models import BookModel
@@ -95,9 +96,9 @@ from apps.mybrick.models import BookModel
 class AllowOwnBooksPolicy(BasePolicy):
     policy_type = PolicyTypeEnum.PERMISSIVE
 
-    async def filter(self, user_uuid: str | None, obj_class: type[BookModel]):
+    async def filter(self, obj_class: type[BookModel]):
         # Allow access to the books written by the current user
-        user = await UserModel.get_one_or_none(uuid=user_uuid)
+        user = await UserModel.get_one_or_none(uuid=execution_context.user_uuid)
         if not user:
             return AlwaysFalseWhereClause
         return obj_class.author == user.name
