@@ -42,3 +42,5 @@ NEW_TAG="v$NEW_VERSION"
 
 git tag "$NEW_TAG"
 echo "Tagged new version: $NEW_TAG"
+git push origin "$NEW_TAG"
+echo "Pushed tag to remote repository."
