@@ -10,7 +10,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, MappedAsDataclass, mapped_co
 from sqlalchemy.sql._typing import _ColumnExpressionOrStrLabelArgument
 
 from brickworks.core.acl.base_policy import BasePolicy
-from brickworks.core.auth.authcontext import auth_context
+from brickworks.core.auth.executioncontext import execution_context
 from brickworks.core.db import db
 from brickworks.core.signals import BaseSignal, signals
 from brickworks.core.utils.sqlalchemy import TypeWhereClause
@@ -135,7 +135,7 @@ class BaseDBModel(MappedAsDataclass, Base, kw_only=True):
         """
         query = select(cls)
         if _apply_policies:
-            query = await cls.apply_policies_to_query(query, user_uuid=auth_context.user_uuid)
+            query = await cls.apply_policies_to_query(query, user_uuid=execution_context.user_uuid)
         if kwargs:
             query = query.where(and_(*(getattr(cls, key) == value for key, value in kwargs.items())))
         if _filter_clause is not None:
@@ -209,7 +209,7 @@ class BaseDBModel(MappedAsDataclass, Base, kw_only=True):
 
         if _apply_policies:
             # if user_uuid is given we apply the policies
-            query = await cls.apply_policies_to_query(query, user_uuid=auth_context.user_uuid)
+            query = await cls.apply_policies_to_query(query, user_uuid=execution_context.user_uuid)
 
         # filter by keys
         if kwargs:

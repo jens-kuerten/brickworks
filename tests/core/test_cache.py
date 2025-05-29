@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 import pytest
 
-from brickworks.core.auth.authcontext import AuthContext
+from brickworks.core.auth.executioncontext import ExecutionContext
 from brickworks.core.cache import cache
 from brickworks.core.settings import settings
 from tests.conftest import TestApp
@@ -29,7 +29,7 @@ async def test_set_and_get_with_tenant(app: TestApp, cache_backend: TCacheBacken
 
     # set in master tenant (tests run in master tenant by default)
     await cache.set_key("foo", "bar", namespace="test", expire=2)
-    async with AuthContext(tenant_schema="test_schema"):
+    async with ExecutionContext(tenant_schema="test_schema"):
         assert await cache.get_key("foo", namespace="test") is None  # key doesn't exist in test tenant
         await cache.set_key("foo", "bar_test", namespace="test", expire=2)  # set in test tenant
 
@@ -49,7 +49,7 @@ async def test_delete(app: TestApp, cache_backend: TCacheBackendFixture) -> None
 async def test_delete_with_tenant(app: TestApp, cache_backend: TCacheBackendFixture) -> None:
     # Set in master tenant
     await cache.set_key("delkey", "master_value", namespace="test", expire=2)
-    async with AuthContext(tenant_schema="test_schema"):
+    async with ExecutionContext(tenant_schema="test_schema"):
         # Should not see master tenant's key
         assert await cache.get_key("delkey", namespace="test") is None
         # Set in tenant
@@ -80,7 +80,7 @@ async def test_push_and_pop_queue(app: TestApp, cache_backend: TCacheBackendFixt
 async def test_queue_with_tenant(app: TestApp, cache_backend: TCacheBackendFixture) -> None:
     # Push to queue in master tenant
     await cache.push_to_queue("q", "master_a", namespace="test")
-    async with AuthContext(tenant_schema="test_schema"):
+    async with ExecutionContext(tenant_schema="test_schema"):
         # Queue should be empty in tenant
         assert await cache.pop_from_queue("q", namespace="test") is None
         # Push to queue in tenant
@@ -182,9 +182,9 @@ async def test_lru_cache_tenant_isolation(app: TestApp, cache_backend: TCacheBac
     assert call_counter["count"] == 1
 
     # Switch to another tenant
-    from brickworks.core.auth.authcontext import AuthContext
+    from brickworks.core.auth.executioncontext import ExecutionContext
 
-    async with AuthContext(tenant_schema="test_schema"):
+    async with ExecutionContext(tenant_schema="test_schema"):
         # Should NOT hit cache, should call function again
         result_tenant = await add(1, 2)
         assert result_tenant == 3
@@ -236,7 +236,7 @@ async def test_set_remove_and_membership(app: TestApp, cache_backend: TCacheBack
 @pytest.mark.asyncio
 async def test_set_tenant_isolation(app: TestApp, cache_backend: TCacheBackendFixture) -> None:
     await cache.add_to_set("tenants", "foo", namespace="test", master_tenant=True)
-    async with AuthContext(tenant_schema="test_schema"):
+    async with ExecutionContext(tenant_schema="test_schema"):
         # Should not see master tenant's set
         assert await cache.get_set_members("tenants", namespace="test") == set()
         await cache.add_to_set("tenants", "bar", namespace="test")
@@ -249,7 +249,7 @@ async def test_set_tenant_isolation(app: TestApp, cache_backend: TCacheBackendFi
 
     # clean up
     await cache.remove_from_set("tenants", "foo", namespace="test")
-    async with AuthContext(tenant_schema="test_schema"):
+    async with ExecutionContext(tenant_schema="test_schema"):
         await cache.remove_from_set("tenants", "bar", namespace="test")
 
 
@@ -280,7 +280,7 @@ async def test_index_tenant_isolation(app: TestApp, cache_backend: TCacheBackend
     # Add key in master tenant
     await cache.set_key("k1", "v1", namespace="test", indices=["myindex"])
     # Switch to tenant and add another key with the same index
-    async with AuthContext(tenant_schema="test_schema"):
+    async with ExecutionContext(tenant_schema="test_schema"):
         await cache.set_key("k2", "v2", namespace="test", indices=["myindex"])
         # Only k2 should be visible in tenant
         keys_tenant = await cache.list_keys_by_index("myindex", namespace="test")
@@ -292,7 +292,7 @@ async def test_index_tenant_isolation(app: TestApp, cache_backend: TCacheBackend
     assert set(keys_master) == {"k1"}
     # Clean up
     await cache.delete_key("k1", namespace="test")
-    async with AuthContext(tenant_schema="test_schema"):
+    async with ExecutionContext(tenant_schema="test_schema"):
         await cache.delete_key("k2", namespace="test")
 
 
@@ -344,7 +344,7 @@ async def test_lru_cache_clear_tenant_isolation(app: TestApp, cache_backend: TCa
     assert call_counter["count"] == 1
 
     # Switch to tenant and call (should miss cache)
-    async with AuthContext(tenant_schema="test_schema"):
+    async with ExecutionContext(tenant_schema="test_schema"):
         result_tenant = await add(1, 2)
         assert result_tenant == 3
         assert call_counter["count"] == 2

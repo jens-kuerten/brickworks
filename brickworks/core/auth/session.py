@@ -10,6 +10,7 @@ from starlette.datastructures import MutableHeaders
 from starlette.requests import HTTPConnection
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from brickworks.core.auth.executioncontext import execution_context
 from brickworks.core.cache import cache
 from brickworks.core.settings import settings
 
@@ -76,6 +77,10 @@ class SessionMiddleware:
                 scope["__session_key"] = session_key
                 if scope["session"] is None:
                     scope["session"] = {}
+
+                # Update execution_context.user_uuid after loading session
+                user_uuid = scope["session"].get("user_uuid")
+                execution_context.user_uuid = user_uuid
 
                 initial_session_was_empty = False
             except (BadTimeSignature, SignatureExpired, json.JSONDecodeError):

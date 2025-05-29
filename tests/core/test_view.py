@@ -2,7 +2,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import aliased
 
 from brickworks.core.acl.policies import RoleBasedAccessPolicy
-from brickworks.core.auth.authcontext import AuthContext
+from brickworks.core.auth.executioncontext import ExecutionContext
 from brickworks.core.models.base_view import BaseView
 from brickworks.core.models.role_model import RoleModel, user_role_table
 from brickworks.core.models.user_model import UserModel
@@ -103,7 +103,7 @@ async def test_user_role_view_with_policies(app: TestApp) -> None:
     await bob.add_role(role_user)
     await charlie.add_role(role_user)
 
-    async with AuthContext(alice.uuid):
+    async with ExecutionContext(alice.uuid):
         # Alice does not have the admin role, so she should not see any results
         user_roles = await UserRoleViewTest.get_list_with_policies()
         assert len(user_roles) == 0

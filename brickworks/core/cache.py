@@ -58,9 +58,9 @@ class BrickworksCache:
     def _generate_key(self, key: str, namespace: str, master_tenant: bool) -> str:
         tenant: str = settings.MASTER_DB_SCHEMA
         if not master_tenant:
-            from brickworks.core.auth.authcontext import auth_context
+            from brickworks.core.auth.executioncontext import execution_context
 
-            tenant_schema = auth_context.tenant_schema
+            tenant_schema = execution_context.tenant_schema
             if not tenant_schema:
                 raise ValueError("Tried to access current tenant before auth context has a tenant set")
             tenant = tenant_schema

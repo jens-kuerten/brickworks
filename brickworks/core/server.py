@@ -4,8 +4,8 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from brickworks.core.auth.authcontext import AuthContextMiddleware
 from brickworks.core.auth.csrf import CSRFMiddleware
+from brickworks.core.auth.executioncontext import ExecutionContextMiddleware
 from brickworks.core.auth.session import SessionMiddleware
 from brickworks.core.db import DBSessionMiddleware
 from brickworks.core.module_loader import load_modules
@@ -29,8 +29,6 @@ def create_app(for_testing: bool = False) -> FastAPI:
         # if we run the app with testclient we will create database sessions ourselves, so we can roll back
         app_api.add_middleware(DBSessionMiddleware)
 
-    app_api.add_middleware(AuthContextMiddleware)  # needs to be before session middleware
-
     app_api.add_middleware(CSRFMiddleware)  # needs to be before session middleware
     app_api.add_middleware(
         SessionMiddleware,
@@ -40,6 +38,7 @@ def create_app(for_testing: bool = False) -> FastAPI:
         https_only=False,
         domain=None,
     )
+    app_api.add_middleware(ExecutionContextMiddleware)
     app_api.add_middleware(
         CORSMiddleware,
         allow_origins=["http://localhost:3000", "http://localhost:8000"],

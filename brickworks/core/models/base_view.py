@@ -5,7 +5,7 @@ from sqlalchemy import Select, and_
 
 from brickworks.core import db
 from brickworks.core.acl.base_policy import BasePolicy
-from brickworks.core.auth.authcontext import auth_context
+from brickworks.core.auth.executioncontext import execution_context
 from brickworks.core.models.base_dbmodel import BaseDBModel
 from brickworks.core.schemas.base_schema import BaseSchema
 from brickworks.core.utils.sqlalchemy import TypeOrderBy, TypeWhereClause
@@ -89,7 +89,7 @@ class BaseView(BaseSchema):
                 raise ValueError("Cannot apply policies without a model class")
             # if _apply_policies is given we apply the policies of the model class
             query = await cls.__policy_model_class__.apply_policies_to_query(
-                query, user_uuid=auth_context.user_uuid, policies=cls.__policies__ or None
+                query, user_uuid=execution_context.user_uuid, policies=cls.__policies__ or None
             )
 
         # filter by keys
@@ -167,7 +167,7 @@ class BaseView(BaseSchema):
                 raise ValueError("Cannot apply policies without a model class")
             # if _apply_policies is given we apply the policies of the model class
             query = await cls.__policy_model_class__.apply_policies_to_query(
-                query, user_uuid=auth_context.user_uuid, policies=cls.__policies__ or None
+                query, user_uuid=execution_context.user_uuid, policies=cls.__policies__ or None
             )
 
         # filter by keys

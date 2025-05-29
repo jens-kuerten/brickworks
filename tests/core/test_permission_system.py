@@ -6,7 +6,7 @@ from brickworks.core.acl.policies import (
     RoleAllowPolicy,
     RoleBasedAccessPolicy,
 )
-from brickworks.core.auth.authcontext import AuthContext
+from brickworks.core.auth.executioncontext import ExecutionContext
 from brickworks.core.models.role_model import RoleModel
 from brickworks.core.models.user_model import UserModel, UserStatusEnum
 from tests.conftest import TestApp
@@ -28,7 +28,7 @@ async def test_no_policy_set(app: TestApp) -> None:
     user_alice = await create_test_user("Alice", "Smith")
     await create_test_user("Bob", "Smith")
 
-    async with AuthContext(user_alice.uuid):
+    async with ExecutionContext(user_alice.uuid):
         result = await UserModel.get_list_with_policies()
         # No policies are applied so we should see nobody
         assert len(result) == 0
@@ -38,7 +38,7 @@ async def test_allow_public_access_policy(app: TestApp) -> None:
     await create_test_user("Alice", "Smith")
     await create_test_user("Bob", "Smith")
 
-    async with AuthContext(None):
+    async with ExecutionContext(None):
         # no logged in user
         result = await UserModel.get_list_with_policies()
         # No policies are applied so we should see nobody
@@ -46,7 +46,7 @@ async def test_allow_public_access_policy(app: TestApp) -> None:
 
     # add AllowPublicAccessPolicy to the UserModel
     with patch.object(UserModel, "__policies__", [AllowPublicAccessPolicy()]):
-        async with AuthContext(None):
+        async with ExecutionContext(None):
             # no logged in user
             result = await UserModel.get_list_with_policies()
             # all users should be visible
@@ -61,17 +61,17 @@ async def test_allow_active_user_access_policy(app: TestApp) -> None:
 
     # add AllowActiveUserAccessPolicy to the UserModel
     with patch.object(UserModel, "__policies__", [AllowActiveUserAccessPolicy()]):
-        async with AuthContext(user_alice.uuid):
+        async with ExecutionContext(user_alice.uuid):
             result = await UserModel.get_list_with_policies()
             # Alice is active, so she should see Bob
             assert len(result) >= 2
 
-        async with AuthContext(user_bob.uuid):
+        async with ExecutionContext(user_bob.uuid):
             result = await UserModel.get_list_with_policies()
             # Bob is inactive, so he should not see anyone
             assert len(result) == 0
 
-        async with AuthContext(None):
+        async with ExecutionContext(None):
             result = await UserModel.get_list_with_policies()
             # no logged in user
             assert len(result) == 0
@@ -87,7 +87,7 @@ async def test_role_allow_policy(app: TestApp) -> None:
     # add RoleAllowPolicy to the UserModel
     with patch.object(UserModel, "__policies__", [RoleAllowPolicy(role1.role_name, "read")]):
         # query as Alice
-        async with AuthContext(user_alice.uuid):
+        async with ExecutionContext(user_alice.uuid):
             result = await UserModel.get_list_with_policies()
             # Alice does not have the role, so she should not see Bob
             assert len(result) == 0
@@ -107,7 +107,7 @@ async def test_role_based_access_policy_permissive(app: TestApp) -> None:
     # add RoleBasedAccessPolicy to the UserModel
     with patch.object(UserModel, "__policies__", [RoleBasedAccessPolicy(role1.role_name)]):
         # query as Alice
-        async with AuthContext(user_alice.uuid):
+        async with ExecutionContext(user_alice.uuid):
             result = await UserModel.get_list_with_policies()
 
             # Alice does not have the role, so she should not see Bob
@@ -128,7 +128,7 @@ async def test_role_based_access_policy_restrictive(app: TestApp) -> None:
     # add RoleBasedAccessPolicy to the UserModel set to retrictive
     with patch.object(UserModel, "__policies__", [RoleBasedAccessPolicy(role1.role_name, restrictive=True)]):
         # query as Alice
-        async with AuthContext(user_alice.uuid):
+        async with ExecutionContext(user_alice.uuid):
             result = await UserModel.get_list_with_policies()
 
             # Alice does not have the role, so she should not see Bob
@@ -148,7 +148,7 @@ async def test_role_based_access_policy_restrictive(app: TestApp) -> None:
         [RoleBasedAccessPolicy(role1.role_name, restrictive=True), AllowActiveUserAccessPolicy()],
     ):
         # query as Alice
-        async with AuthContext(user_alice.uuid):
+        async with ExecutionContext(user_alice.uuid):
             # remove role from Alice
             await user_alice.remove_role(role1)
 

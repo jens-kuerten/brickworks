@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from brickworks.core import db
-from brickworks.core.auth.authcontext import AuthContext
+from brickworks.core.auth.executioncontext import ExecutionContext
 from brickworks.core.server import create_app
 
 _app = create_app(for_testing=True)
@@ -34,7 +34,7 @@ async def app() -> TestApp:
        * The global force_rollback provided by Encode/Databases doesn't play well
          with inner transactions and cause issues.
     """
-    async with LifespanManager(_app), db(), AuthContext():
+    async with LifespanManager(_app), db(), ExecutionContext():
         yield _app
         await db.session.rollback()
 

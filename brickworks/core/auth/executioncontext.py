@@ -9,42 +9,56 @@ from starlette.responses import Response
 
 from brickworks.core.settings import settings
 
-_auth_context_var: ContextVar[Optional["AuthContext"]] = ContextVar("auth_context", default=None)
+_execution_context_var: ContextVar[Optional["ExecutionContext"]] = ContextVar("execution_context", default=None)
 
 
-def _get_context_var() -> "AuthContext":
-    context = _auth_context_var.get()
+def _get_context_var() -> "ExecutionContext":
+    context = _execution_context_var.get()
     if context is None:
-        raise RuntimeError("AuthContext not set")
+        raise RuntimeError("ExecutionContext not set")
     return context
 
 
-class AuthContextMeta(type):
+class ExecutionContextMeta(type):
     @property
     def user_uuid(cls) -> str | None:
         return _get_context_var().user_uuid
+
+    @user_uuid.setter
+    def user_uuid(cls, value: str | None) -> None:
+        # the user_uuid might be set later, when the session middleware has processed the request
+        context = _get_context_var()
+        context.user_uuid = value
+        _execution_context_var.set(context)
 
     @property
     def tenant_schema(cls) -> str | None:
         return _get_context_var().tenant_schema
 
+    @property
+    def request(cls) -> Request | None:
+        return _get_context_var().request
 
-class AuthContext(metaclass=AuthContextMeta):
-    def __init__(self, user_uuid: str | None = None, tenant_schema: str | None = None) -> None:
+
+class ExecutionContext(metaclass=ExecutionContextMeta):
+    def __init__(
+        self, user_uuid: str | None = None, tenant_schema: str | None = None, request: Request | None = None
+    ) -> None:
         self.user_uuid = user_uuid
         self.tenant_schema = tenant_schema or settings.MASTER_DB_SCHEMA
-        self.token = _auth_context_var.set(self)
+        self.token = _execution_context_var.set(self)
+        self.request = request
 
-    async def __aenter__(self) -> type["AuthContext"]:
+    async def __aenter__(self) -> type["ExecutionContext"]:
         return type(self)
 
     async def __aexit__(
         self, exc_type: type[BaseException] | None, exc_value: BaseException | None, traceback: TracebackType | None
     ) -> None:
-        _auth_context_var.reset(self.token)
+        _execution_context_var.reset(self.token)
 
 
-class AuthContextMiddleware(BaseHTTPMiddleware):
+class ExecutionContextMiddleware(BaseHTTPMiddleware):
     async def _extract_tenant_from_request(self, request: Request) -> str | None:
         """
         Extract tenant schema from the request.
@@ -74,11 +88,11 @@ class AuthContextMiddleware(BaseHTTPMiddleware):
                 status_code=404,
                 headers={"Content-Type": "text/plain"},
             )
-        async with auth_context(
-            user_uuid=request.session.get("user_uuid"), tenant_schema=await self._extract_tenant_from_request(request)
+        async with execution_context(
+            user_uuid=None, tenant_schema=await self._extract_tenant_from_request(request), request=request
         ):
             response = await call_next(request)
         return response
 
 
-auth_context = AuthContext
+execution_context = ExecutionContext

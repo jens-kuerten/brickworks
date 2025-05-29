@@ -3,27 +3,27 @@
 Access control in Brickworks is managed through a flexible policy system (PBAC) and role-based access control (RBAC). This allows you to define fine-grained permissions for users and resources in your application.
 
 
-## Auth Context
+## Execution Context
 
-The `AuthContext` is used to provide the current user's identity during a request or operation. It is used as an async context manager:
+The `ExecutionContext` is used to provide the current user's identity during a request or operation. It is used as an async context manager:
 
 ```python
-from brickworks.core.auth.authcontext import AuthContext
+from brickworks.core.auth.authcontext import ExecutionContext
 
-async with AuthContext(user_uuid):
+async with ExecutionContext(user_uuid):
     # perform actions as this user
 ```
 
-During requests to endpoints the `AuthContext` is set automatically by the `AuthContestMiddleware`.
+During requests to endpoints the `ExecutionContext` is set automatically by the `ExecutionContestMiddleware`.
 
-You can access the current AuthContext like this:
+You can access the current ExecutionContext like this:
 
 ```python
-from brickworks.core.auth.authcontext import auth_context
+from brickworks.core import execution_context
 
-auth_context.user_uuid
+execution_context.user_uuid
 ```
- **TODO: add roles to auth_context and remove user_uuid from filter method**
+ **TODO: add roles to execution_context and remove user_uuid from filter method**
 
 ## Policy Based Access Control (PBAC)
 
