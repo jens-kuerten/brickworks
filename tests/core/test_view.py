@@ -30,7 +30,7 @@ class UserRoleTestView(BaseView):
         .join(user_alias)
     )
     __policy_model_class__ = UserModel
-    __policies__ = [RoleBasedAccessPolicy("admin")]
+    __policies__ = [RoleBasedAccessPolicy("test_admin")]
 
 
 class RolesPerUserTestView(BaseView):
@@ -53,7 +53,7 @@ class RolesPerUserTestView(BaseView):
         .group_by(user_alias.name, user_alias.family_name)
     )
     __policy_model_class__ = UserModel
-    __policies__ = [RoleBasedAccessPolicy("admin")]
+    __policies__ = [RoleBasedAccessPolicy("test_admin")]
 
 
 async def test_user_role_view(app: TestApp) -> None:
@@ -66,11 +66,11 @@ async def test_user_role_view(app: TestApp) -> None:
     charlie = await create_test_user("Charlie", "Brown")
 
     # Create some test roles
-    role_admin = await RoleModel(role_name="admin").persist()
+    role_test_admin = await RoleModel(role_name="test_admin").persist()
     role_user = await RoleModel(role_name="user").persist()
 
     # Assign roles to users
-    await alice.add_role(role_admin)
+    await alice.add_role(role_test_admin)
     await alice.add_role(role_user)
     await bob.add_role(role_user)
     await charlie.add_role(role_user)
@@ -89,9 +89,9 @@ async def test_user_role_view(app: TestApp) -> None:
     assert alice_count.role_count == 2
 
     # test get one or none
-    alice_role = await UserRoleTestView.get_one_or_none(role_name="admin", user_name="Alice Smith")
+    alice_role = await UserRoleTestView.get_one_or_none(role_name="test_admin", user_name="Alice Smith")
     assert alice_role is not None
-    assert alice_role.role_name == "admin"
+    assert alice_role.role_name == "test_admin"
 
     # test get list with filtering by key
     user_roles_filtered = await UserRoleTestView.get_list(role_name="user")
@@ -108,7 +108,7 @@ async def test_user_role_view_with_policies(app: TestApp) -> None:
     bob = await create_test_user("Bob", "Johnson")
     charlie = await create_test_user("Charlie", "Brown")
     # Create some test roles
-    role_admin = await RoleModel(role_name="admin").persist()
+    role_test_admin = await RoleModel(role_name="test_admin").persist()
     role_user = await RoleModel(role_name="user").persist()
     # Assign roles to users
     await alice.add_role(role_user)
@@ -116,15 +116,15 @@ async def test_user_role_view_with_policies(app: TestApp) -> None:
     await charlie.add_role(role_user)
 
     async with ExecutionContext(alice.uuid):
-        # Alice does not have the admin role, so she should not see any results
+        # Alice does not have the test_admin role, so she should not see any results
         user_roles = await UserRoleTestView.get_list_with_policies()
         assert len(user_roles) == 0
         user_count = await RolesPerUserTestView.get_list_with_policies()
         assert len(user_count) == 0
 
-        await alice.add_role(role_admin)
+        await alice.add_role(role_test_admin)
 
-        # Now Alice has the admin role, so she should see all users
+        # Now Alice has the test_admin role, so she should see all users
         user_roles = await UserRoleTestView.get_list_with_policies()
         assert len(user_roles) >= 4
 
