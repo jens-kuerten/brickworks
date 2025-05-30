@@ -24,8 +24,9 @@ def create_app(for_testing: bool = False) -> FastAPI:
     # (to ensure it has access to sessions and the database)
     for brick in load_modules():
         _add_routers(app_api, brick.routers)
-        _add_auto_routes(app_api)
         _add_middlewares(app_api, brick.middlewares)
+
+    _add_auto_routes(app_api)
 
     if not for_testing:
         # if we run the app with testclient we will create database sessions ourselves, so we can roll back
