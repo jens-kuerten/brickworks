@@ -37,8 +37,6 @@ Add `WithGetRouteMixin` to your model or view class and define the `__routing_pa
 
 **All endpoints are automatically secured by the policies set for the model or view.** This means that any access control or filtering logic you define in your model's or view's `__policies__` will be enforced for all requests to these endpoints.
 
-This works exactly the same for both models and views. For more details on defining models and views, see the [database models](database_models.md) and [view models](view_models.md) documentation.
-
 ### Example: Adding routes to a model or view
 
 ```python
@@ -70,11 +68,6 @@ Paginated list endpoints return a `PaginatedResponse` object:
   "page_size": 100
 }
 ```
-
-### Customization
-
-- You can override the default page size and add additional query parameters by customizing the `_get_all` method in your class.
-- The mixin respects all policies and filters defined on your model or view.
 
 ---
 
