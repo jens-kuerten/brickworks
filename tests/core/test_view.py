@@ -86,6 +86,16 @@ async def test_user_role_view(app: TestApp) -> None:
     assert alice_count is not None
     assert alice_count.role_count == 2
 
+    # test get one or none
+    alice_role = await UserRoleViewTest.get_one_or_none(role_name="admin", user_name="Alice Smith")
+    assert alice_role is not None
+    assert alice_role.role_name == "admin"
+
+    # test get list with filtering by key
+    user_roles_filtered = await UserRoleViewTest.get_list(role_name="user")
+    assert len(user_roles_filtered) >= 3
+    assert all(role.role_name == "user" for role in user_roles_filtered)
+
 
 async def test_user_role_view_with_policies(app: TestApp) -> None:
     """

@@ -11,6 +11,7 @@ from typing import TypeVar
 from pydantic import BaseModel
 
 from brickworks.core.models.base_dbmodel import BaseDBModel
+from brickworks.core.models.base_view import BaseView
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +100,14 @@ def get_models_by_fqpn() -> dict[str, type[BaseDBModel]]:
     models_filtered = [model for model in models if hasattr(model, "__tablename__")]
 
     return {model.fqpn(): model for model in models_filtered}
+
+
+@lru_cache
+def get_views() -> list[type[BaseView]]:
+    views = get_all_subclasses(BaseView)
+    # remove abstract views
+    views_filtered = [view for view in views if hasattr(view, "__select__")]
+    return views_filtered
 
 
 def _get_module_json_path(module_name: str) -> str:

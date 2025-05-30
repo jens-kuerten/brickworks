@@ -2,10 +2,9 @@ from sqlalchemy import and_, select
 
 from brickworks.core import execution_context
 from brickworks.core.acl.base_policy import BasePolicy, PolicyTypeEnum
-from brickworks.core.models import BaseDBModel, UserModel
+from brickworks.core.models import BaseDBModel
 from brickworks.core.models.base_view import BaseView
 from brickworks.core.models.role_model import role_acl_table
-from brickworks.core.models.user_model import UserStatusEnum
 from brickworks.core.utils.sqlalchemy import AlwaysFalseWhereClause, AlwaysTrueWhereClause, TypeWhereClause
 
 
@@ -31,6 +30,8 @@ class AllowActiveUserAccessPolicy(BasePolicy):
     policy_type = PolicyTypeEnum.PERMISSIVE
 
     async def filter(self, obj_class: type["BaseDBModel"] | type["BaseView"]) -> TypeWhereClause:
+        from brickworks.core.models.user_model import UserModel, UserStatusEnum
+
         if execution_context.user_uuid is None:
             return AlwaysFalseWhereClause
         user = await UserModel.get_one_or_none(uuid=execution_context.user_uuid)
@@ -54,6 +55,8 @@ class RoleAllowPolicy(BasePolicy):
         self.permission = permission
 
     async def filter(self, obj_class: type["BaseDBModel"]) -> TypeWhereClause:
+        from brickworks.core.models.user_model import UserModel
+
         if execution_context.user_uuid is None:
             # if no user is provided, we assume public access (which has no roles)
             return AlwaysFalseWhereClause
@@ -92,6 +95,8 @@ class RoleBasedAccessPolicy(BasePolicy):
             self.policy_type = PolicyTypeEnum.RESTRICTIVE
 
     async def filter(self, obj_class: type["BaseDBModel"] | type["BaseView"]) -> TypeWhereClause:
+        from brickworks.core.models.user_model import UserModel
+
         if execution_context.user_uuid is None:
             # if no user is provided, we assume public access (which has no roles)
             return AlwaysFalseWhereClause

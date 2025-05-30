@@ -9,18 +9,17 @@ from httpx import ASGITransport, AsyncClient
 
 from brickworks.core import db
 from brickworks.core.auth.executioncontext import ExecutionContext
+from brickworks.core.module_loader import get_models_by_fqpn, get_views
 from brickworks.core.server import create_app
-
-_app = create_app(for_testing=True)
 
 logger = logging.getLogger(__name__)
 
 
-TestApp = AsyncIterable[FastAPI]
+TestApp = FastAPI
 
 
 @pytest.fixture
-async def app() -> TestApp:
+async def app() -> AsyncIterable[FastAPI]:
     """
     Create a FastAPI instance.
 
@@ -34,9 +33,14 @@ async def app() -> TestApp:
        * The global force_rollback provided by Encode/Databases doesn't play well
          with inner transactions and cause issues.
     """
+    get_views.cache_clear()  # clear lru caches in case a test adds a new view or model
+    get_models_by_fqpn.cache_clear()
+    _app = create_app(for_testing=True)
     async with LifespanManager(_app), db(), ExecutionContext():
         yield _app
         await db.session.rollback()
+    get_views.cache_clear()
+    get_models_by_fqpn.cache_clear()
 
 
 @pytest.fixture

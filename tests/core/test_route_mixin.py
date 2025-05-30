@@ -1,0 +1,66 @@
+from httpx import AsyncClient
+from sqlalchemy import func, select
+from sqlalchemy.orm import aliased
+
+from brickworks.core.acl.policies import AllowPublicAccessPolicy
+from brickworks.core.models.base_view import BaseView
+from brickworks.core.models.mixins import WithGetRouteMixin
+from brickworks.core.models.role_model import RoleModel, user_role_table
+from brickworks.core.models.user_model import UserModel
+from tests.core.utils import create_test_user
+
+user_alias = aliased(UserModel)
+user_role_table_alias = aliased(user_role_table)
+
+
+class RolesPerUserView(BaseView, WithGetRouteMixin):
+    # define the fields of your query result
+    # the field names need to match the (labeled) column names returned by the select statement
+    user_name: str
+    role_count: int
+
+    __routing_path__ = "/test/roles_per_user"
+    __routing_get_key__ = "user_name"
+    __policies__ = [AllowPublicAccessPolicy()]  # policies to apply to this view, can be empty
+    __policy_model_class__ = UserModel  # the model class to apply policies to
+    # define the select statement
+    __select__ = (
+        select(
+            user_alias.name.label("user_name"),
+            func.count(user_role_table_alias.c.role_uuid).label("role_count"),
+        )
+        .select_from(user_alias)
+        .outerjoin(user_role_table_alias, user_alias.uuid == user_role_table_alias.c.user_uuid)
+        .group_by(user_alias.name)
+    )
+
+
+async def test_with_get_route_mixin(client: AsyncClient) -> None:
+    """
+    Test the WithGetRouteMixin functionality, by usint the RolesPerUserView.
+    """
+
+    # Create a test user with role
+    user = await create_test_user("Alice", "Smith")
+    role = await RoleModel(role_name="test_role").persist()
+    await user.add_role(role)
+
+    # fetch the roles per user
+    response = await client.get("/api/test/roles_per_user")
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) > 0
+
+    # check if the user is in the response and has the correct role count
+    user_data = next((item for item in data if item["user_name"] == "Alice Smith"), None)
+    assert user_data is not None
+    assert user_data["role_count"] == 1
+
+    # fetch the user by name
+    response = await client.get("/api/test/roles_per_user/Alice Smith")
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, dict)
+    assert data["user_name"] == "Alice Smith"
+    assert data["role_count"] == 1

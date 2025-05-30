@@ -50,7 +50,7 @@ class BaseView(BaseSchema):
     async def get_one_or_none_with_policies(
         cls: type[BaseViewType],
         _filter_clause: TypeWhereClause | None = None,
-        **kwargs: dict[str, Any],
+        **kwargs: Any,  # noqa: ANN401
     ) -> BaseViewType | None:
         """
         Retrieve a single database row matching all provided key-value pairs, with custom filtering.
@@ -70,7 +70,7 @@ class BaseView(BaseSchema):
         cls: type[BaseViewType],
         _apply_policies: bool = False,
         _filter_clause: TypeWhereClause | None = None,
-        **kwargs: dict[str, Any],
+        **kwargs: Any,  # noqa: ANN401
     ) -> BaseViewType | None:
         """
         Retrieve a single database row matching all provided key-value pairs, with optional policy and custom filtering.
@@ -86,13 +86,19 @@ class BaseView(BaseSchema):
         if _apply_policies:
             if not cls.__policy_model_class__:
                 raise ValueError("Cannot apply policies without a model class")
-            # if _apply_policies is given we apply the policies of the model class
             query = await cls.__policy_model_class__.apply_policies_to_query(query, policies=cls.__policies__ or None)
 
-        # filter by keys
+        # Map kwargs to columns in __select__ using their labels
+        label_to_column = {col._label: col for col in query.selected_columns}
         if kwargs:
-            query = query.where(and_(*(getattr(cls, key) == value for key, value in kwargs.items())))
-        # filter by custom filter clause
+            filters = []
+            for key, value in kwargs.items():
+                col = label_to_column.get(key)
+                if col is None:
+                    raise AttributeError(f"Column '{key}' not found in view select statement")
+                filters.append(col == value)
+            query = query.where(and_(*filters))
+
         if _filter_clause is not None:
             query = query.where(_filter_clause)
         result = await db.session.execute(query)
@@ -106,7 +112,7 @@ class BaseView(BaseSchema):
         _order_by: TypeOrderBy | None = None,
         _per_page: int = -1,
         _page: int = 1,
-        **kwargs: dict[str, Any],
+        **kwargs: Any,  # noqa: ANN401
     ) -> Sequence[BaseViewType]:
         """
         Retrieve a list of database rows with flexible filtering, ordering, and pagination.
@@ -141,7 +147,7 @@ class BaseView(BaseSchema):
         _order_by: TypeOrderBy | None = None,
         _per_page: int = -1,
         _page: int = 1,
-        **kwargs: dict[str, Any],
+        **kwargs: Any,  # noqa: ANN401
     ) -> Sequence[BaseViewType]:
         """
         Retrieve a list of database rows with flexible filtering, ordering, and pagination.
@@ -162,13 +168,19 @@ class BaseView(BaseSchema):
         if _apply_policies:
             if not cls.__policy_model_class__:
                 raise ValueError("Cannot apply policies without a model class")
-            # if _apply_policies is given we apply the policies of the model class
             query = await cls.__policy_model_class__.apply_policies_to_query(query, policies=cls.__policies__ or None)
 
-        # filter by keys
+        # Map kwargs to columns in __select__ using their labels
+        label_to_column = {col._label: col for col in query.selected_columns}
         if kwargs:
-            query = query.where(and_(*(getattr(cls, key) == value for key, value in kwargs.items())))
-        # filter by custom filter clause
+            filters = []
+            for key, value in kwargs.items():
+                col = label_to_column.get(key)
+                if col is None:
+                    raise AttributeError(f"Column '{key}' not found in view select statement")
+                filters.append(col == value)
+            query = query.where(and_(*filters))
+
         if _filter_clause is not None:
             query = query.where(_filter_clause)
 
