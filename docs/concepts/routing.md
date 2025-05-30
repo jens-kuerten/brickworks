@@ -52,6 +52,7 @@ class BookModel(BaseDBModel, WithGetRouteMixin):
 ```
 
 This will automatically provide:
+
 - `GET /api/books?page=1&page_size=100` (paginated list)
 - `GET /api/books/{uuid}` (single object by key)
 
