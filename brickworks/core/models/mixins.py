@@ -1,4 +1,3 @@
-from collections.abc import Sequence
 from typing import Any
 
 from fastapi import APIRouter
@@ -6,6 +5,7 @@ from fastapi import APIRouter
 from brickworks.core.exceptions import NotFoundException
 from brickworks.core.models.base_dbmodel import BaseDBModel
 from brickworks.core.models.base_view import BaseView
+from brickworks.core.schemas.base_schema import PaginatedResponse
 
 
 class WithGetRouteMixin:
@@ -32,16 +32,18 @@ class WithGetRouteMixin:
 
         router = APIRouter()
 
-        async def _get_all() -> Sequence[BaseView | BaseDBModel]:
-            return await cls.get_list_with_policies()
+        async def _get_all(page: int = 1, page_size: int = 500) -> PaginatedResponse[BaseDBModel | BaseView]:
+            items, total = await cls.get_paginated_list_with_policies(_per_page=page_size, _page=page)
+            return PaginatedResponse(items=items, total=total, page=page, page_size=page_size)
 
         router.add_api_route(
             cls.__routing_path__,
             _get_all,
-            response_model=list[cls],  # type: ignore
-            summary=f"Get all {cls.__name__} objects",
-            description=f"Get all {cls.__name__} objects with optional filtering, ordering, and pagination.",
+            response_model=PaginatedResponse[cls],  # type: ignore
+            summary=f"Get all {cls.__name__} objects (paginated)",
+            description=f"Get all {cls.__name__} objects with pagination.",
         )
+
         routing_get_key = cls.__routing_get_key__
         if routing_get_key:
 

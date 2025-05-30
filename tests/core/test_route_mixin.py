@@ -37,27 +37,30 @@ class RolesPerUserView(BaseView, WithGetRouteMixin):
 
 async def test_with_get_route_mixin(client: AsyncClient) -> None:
     """
-    Test the WithGetRouteMixin functionality, by usint the RolesPerUserView.
+    Test the WithGetRouteMixin functionality, by using the RolesPerUserView.
     """
-
     # Create a test user with role
     user = await create_test_user("Alice", "Smith")
     role = await RoleModel(role_name="test_role").persist()
     await user.add_role(role)
 
-    # fetch the roles per user
-    response = await client.get("/api/test/roles_per_user")
+    # fetch the roles per user (paginated response)
+    response = await client.get("/api/test/roles_per_user?page=1&page_size=300")
     assert response.status_code == 200
     data = response.json()
-    assert isinstance(data, list)
-    assert len(data) > 0
+    assert isinstance(data, dict)
+    assert "items" in data and "total" in data and "page" in data and "page_size" in data
+    assert isinstance(data["items"], list)
+    assert data["total"] >= 1
+    assert data["page"] == 1
+    assert data["page_size"] == 300
 
     # check if the user is in the response and has the correct role count
-    user_data = next((item for item in data if item["user_name"] == "Alice Smith"), None)
+    user_data = next((item for item in data["items"] if item["user_name"] == "Alice Smith"), None)
     assert user_data is not None
     assert user_data["role_count"] == 1
 
-    # fetch the user by name
+    # fetch the user by name (single object response)
     response = await client.get("/api/test/roles_per_user/Alice Smith")
     assert response.status_code == 200
     data = response.json()
