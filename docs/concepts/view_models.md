@@ -42,7 +42,7 @@ class RolesPerUserView(BaseView):
             func.count(user_role_table_alias.c.role_uuid).label("role_count"),
         )
         .select_from(user_alias)
-        .join(user_role_table_alias, user_alias.uuid == user_role_table_alias.c.user_uuid)
+        .outerjoin(user_role_table_alias, user_alias.uuid == user_role_table_alias.c.user_uuid)
         .group_by(user_alias.name)
     )
 ```
