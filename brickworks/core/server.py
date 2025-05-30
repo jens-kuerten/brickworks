@@ -9,7 +9,7 @@ from brickworks.core.auth.executioncontext import ExecutionContextMiddleware
 from brickworks.core.auth.session import SessionMiddleware
 from brickworks.core.db import DBSessionMiddleware
 from brickworks.core.models.mixins import WithGetRouteMixin
-from brickworks.core.module_loader import get_views, load_modules
+from brickworks.core.module_loader import get_models_by_fqpn, get_views, load_modules
 from brickworks.core.utils.importer import import_object_from_path
 
 logging.basicConfig(level=logging.INFO)
@@ -24,7 +24,7 @@ def create_app(for_testing: bool = False) -> FastAPI:
     # (to ensure it has access to sessions and the database)
     for brick in load_modules():
         _add_routers(app_api, brick.routers)
-        _add_view_routes(app_api)
+        _add_auto_routes(app_api)
         _add_middlewares(app_api, brick.middlewares)
 
     if not for_testing:
@@ -60,11 +60,16 @@ def _add_routers(app: FastAPI, routers: list[str]) -> None:
         app.include_router(router)
 
 
-def _add_view_routes(app: FastAPI) -> None:
+def _add_auto_routes(app: FastAPI) -> None:
     views = get_views()
     views_with_routes = [view for view in views if issubclass(view, WithGetRouteMixin)]
     for view in views_with_routes:
         router = view.get_router()
+        app.include_router(router)
+    models = get_models_by_fqpn()
+    models_with_routes = [model for model in models.values() if issubclass(model, WithGetRouteMixin)]
+    for model in models_with_routes:
+        router = model.get_router()
         app.include_router(router)
 
 

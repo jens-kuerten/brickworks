@@ -35,6 +35,17 @@ class RolesPerUserView(BaseView, WithGetRouteMixin):
     )
 
 
+class TestUserModel(UserModel, WithGetRouteMixin):
+    """
+    Test UserModel with WithGetRouteMixin for testing purposes.
+    """
+
+    __routing_path__ = "/test/user"
+    __routing_get_key__ = "name"
+    __policies__ = [AllowPublicAccessPolicy()]
+    __policy_model_class__ = UserModel
+
+
 async def test_with_get_route_mixin(client: AsyncClient) -> None:
     """
     Test the WithGetRouteMixin functionality, by using the RolesPerUserView.
@@ -67,3 +78,35 @@ async def test_with_get_route_mixin(client: AsyncClient) -> None:
     assert isinstance(data, dict)
     assert data["user_name"] == "Alice Smith"
     assert data["role_count"] == 1
+
+
+async def test_with_get_route_mixin_model(client: AsyncClient) -> None:
+    """
+    Test the WithGetRouteMixin functionality with a model class (TestUserModel).
+    """
+    # Create a test user
+    await create_test_user("Bob", "Johnson")
+
+    # fetch the users (paginated response)
+    response = await client.get("/api/test/user?page=1&page_size=100")
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, dict)
+    assert "items" in data and "total" in data and "page" in data and "page_size" in data
+    assert isinstance(data["items"], list)
+    assert data["total"] >= 1
+    assert data["page"] == 1
+    assert data["page_size"] == 100
+
+    # check if the user is in the response
+    user_data = next((item for item in data["items"] if item["name"] == "Bob Johnson"), None)
+    assert user_data is not None
+    assert user_data["family_name"] == "Johnson"
+
+    # fetch the user by name (single object response)
+    response = await client.get("/api/test/user/Bob Johnson")
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, dict)
+    assert data["name"] == "Bob Johnson"
+    assert data["family_name"] == "Johnson"
