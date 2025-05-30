@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any, ClassVar, Literal, Self, TypeVar, final
 from uuid import uuid4
 
-from sqlalchemy import DateTime, Select, String, and_, delete, insert, or_, select
+from sqlalchemy import DateTime, Select, String, and_, delete, func, insert, or_, select
 from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.orm import DeclarativeBase, Mapped, MappedAsDataclass, mapped_column
 from sqlalchemy.sql._typing import _ColumnExpressionOrStrLabelArgument
@@ -145,8 +145,6 @@ class BaseDBModel(MappedAsDataclass, Base, kw_only=True):
         _order_by: Literal[None]
         | _ColumnExpressionOrStrLabelArgument[Any]
         | list[_ColumnExpressionOrStrLabelArgument[Any]] = None,
-        _per_page: int = -1,
-        _page: int = 1,
         **kwargs: Any,  # noqa: ANN401
     ) -> Sequence[BaseDBModelType]:
         """
@@ -168,8 +166,6 @@ class BaseDBModel(MappedAsDataclass, Base, kw_only=True):
             _apply_policies=True,
             _filter_clause=_filter_clause,
             _order_by=_order_by,
-            _per_page=_per_page,
-            _page=_page,
             **kwargs,
         )
 
@@ -181,8 +177,6 @@ class BaseDBModel(MappedAsDataclass, Base, kw_only=True):
         _order_by: Literal[None]
         | _ColumnExpressionOrStrLabelArgument[Any]
         | list[_ColumnExpressionOrStrLabelArgument[Any]] = None,
-        _per_page: int = -1,
-        _page: int = 1,
         **kwargs: Any,  # noqa: ANN401
     ) -> Sequence[BaseDBModelType]:
         """
@@ -200,26 +194,100 @@ class BaseDBModel(MappedAsDataclass, Base, kw_only=True):
 
         Returns a sequence of matching rows.
         """
+        return (
+            await cls._get_list_common(
+                _apply_policies=_apply_policies,
+                _filter_clause=_filter_clause,
+                _order_by=_order_by,
+                _per_page=-1,  # No pagination by default
+                _page=1,  # Default to first page
+                **kwargs,
+            )
+        )[0]
+
+    @classmethod
+    async def get_paginated_list_with_policies(
+        cls: type[BaseDBModelType],
+        _per_page: int,
+        _page: int,
+        _filter_clause: TypeWhereClause | None = None,
+        _order_by: Literal[None]
+        | _ColumnExpressionOrStrLabelArgument[Any]
+        | list[_ColumnExpressionOrStrLabelArgument[Any]] = None,
+        **kwargs: Any,  # noqa: ANN401
+    ) -> tuple[Sequence[BaseDBModelType], int]:
+        """
+        Retrieve a paginated list of database rows and the total count, applying policies.
+        Returns a tuple: (items, total_count)
+        """
+        return await cls.get_paginated_list(
+            _per_page=_per_page,
+            _page=_page,
+            _apply_policies=True,
+            _filter_clause=_filter_clause,
+            _order_by=_order_by,
+            **kwargs,
+        )
+
+    @classmethod
+    async def get_paginated_list(
+        cls: type[BaseDBModelType],
+        _per_page: int,
+        _page: int,
+        _apply_policies: bool = False,
+        _filter_clause: TypeWhereClause | None = None,
+        _order_by: Literal[None]
+        | _ColumnExpressionOrStrLabelArgument[Any]
+        | list[_ColumnExpressionOrStrLabelArgument[Any]] = None,
+        **kwargs: Any,  # noqa: ANN401
+    ) -> tuple[Sequence[BaseDBModelType], int]:
+        """
+        Retrieve a paginated list of database rows and the total count.
+        Returns a tuple: (items, total_count)
+        """
+        return await cls._get_list_common(
+            _apply_policies=_apply_policies,
+            _filter_clause=_filter_clause,
+            _order_by=_order_by,
+            _per_page=_per_page,
+            _page=_page,
+            **kwargs,
+        )
+
+    @classmethod
+    async def _get_list_common(
+        cls: type[BaseDBModelType],
+        _apply_policies: bool = False,
+        _filter_clause: TypeWhereClause | None = None,
+        _order_by: Literal[None]
+        | _ColumnExpressionOrStrLabelArgument[Any]
+        | list[_ColumnExpressionOrStrLabelArgument[Any]] = None,
+        _per_page: int = -1,
+        _page: int = 1,
+        **kwargs: Any,  # noqa: ANN401
+    ) -> tuple[Sequence[BaseDBModelType], int]:
+        """
+        Shared logic for paginated and non-paginated list queries.
+        Returns a tuple: (items, total_count)
+        """
         query = select(cls)
-
         if _apply_policies:
-            # if user_uuid is given we apply the policies
             query = await cls.apply_policies_to_query(query)
-
-        # filter by keys
         if kwargs:
             query = query.where(and_(*(getattr(cls, key) == value for key, value in kwargs.items())))
-        # filter by custom filter clause
         if _filter_clause is not None:
             query = query.where(_filter_clause)
-
+        # Count query
+        count_query = select(func.count()).select_from(query.subquery())
+        total = (await db.session.execute(count_query)).scalar_one()
+        # Pagination and ordering
         if _order_by is not None:
             query = query.order_by(*_order_by if isinstance(_order_by, list) else [_order_by])
         if _per_page > 0:
             query = query.limit(_per_page).offset((_page - 1) * _per_page)
-
         result = await db.session.execute(query)
-        return result.unique().scalars().all()
+        items = result.unique().scalars().all()
+        return items, total
 
     async def on_persist_pre(self) -> None:
         """

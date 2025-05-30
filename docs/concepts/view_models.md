@@ -79,3 +79,29 @@ async def get_roles_per_user_list():
 
 !!! note
     View models are read-only and cannot be used to insert or update data. They are intended for querying and presenting data only.
+
+## Pagination
+
+View models support efficient pagination using the `get_paginated_list` method, which returns a specific page of results and the total number of matching records.
+
+### Usage Example
+
+```python
+items, total = await RolesPerUserView.get_paginated_list(_per_page=10, _page=1)
+print(f"Total users: {total}")
+for user in items:
+    print(user.user_name, user.role_count)
+```
+
+- `_per_page`: Number of items per page (required)
+- `_page`: Page number (1-based, required)
+- Returns a tuple: `(items, total)` where `items` is a list of view instances and `total` is the total number of matching records (ignoring pagination)
+
+You can also filter and order results as with `get_list`:
+
+```python
+items, total = await RolesPerUserView.get_paginated_list(_per_page=5, _page=1, family_name="Smith")
+```
+
+!!! note
+    Pagination is efficient: the total count is computed in the database using the same filters and policies as the data query.

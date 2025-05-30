@@ -63,6 +63,32 @@ By default these methods will apply access policies.
 
 You can also pass additional filters, ordering, and pagination options to these methods.
 
+## Pagination
+
+Database models support efficient pagination out of the box. You can use the `get_paginated_list` method to retrieve a specific page of results along with the total number of matching records.
+
+### Usage Example
+
+```python
+items, total = await BookModel.get_paginated_list(_per_page=10, _page=2)
+print(f"Total books: {total}")
+for book in items:
+    print(book.title)
+```
+
+- `_per_page`: Number of items per page (required)
+- `_page`: Page number (1-based, required)
+- Returns a tuple: `(items, total)` where `items` is a list of model/view instances and `total` is the total number of matching records (ignoring pagination)
+
+You can also filter and order results as with `get_list`:
+
+```python
+items, total = await BookModel.get_paginated_list(_per_page=5, _page=1, author="J.R.R. Tolkien")
+```
+
+!!! note
+    Pagination is efficient: the total count is computed in the database using the same filters and policies as the data query.
+
 ## Relationships
 
 Models can define relationships to other models, such as one-to-many or many-to-many associations. Use SQLAlchemy's `relationship` and `ForeignKey` to set these up.

@@ -47,3 +47,4 @@ nav:
       - Database Models: concepts/database_models.md
       - Views Models: concepts/view_models.md
       - Access Control: concepts/access_control.md
+      - Routing: concepts/routing.md

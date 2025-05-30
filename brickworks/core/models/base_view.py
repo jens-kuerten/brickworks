@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 from typing import Any, TypeVar
 
-from sqlalchemy import Select, and_
+from sqlalchemy import Select, and_, func, select
 
 from brickworks.core import db
 from brickworks.core.acl.base_policy import BasePolicy
@@ -50,7 +50,7 @@ class BaseView(BaseSchema):
     async def get_one_or_none_with_policies(
         cls: type[BaseViewType],
         _filter_clause: TypeWhereClause | None = None,
-        **kwargs: dict[str, Any],
+        **kwargs: Any,  # noqa: ANN401
     ) -> BaseViewType | None:
         """
         Retrieve a single database row matching all provided key-value pairs, with custom filtering.
@@ -70,7 +70,7 @@ class BaseView(BaseSchema):
         cls: type[BaseViewType],
         _apply_policies: bool = False,
         _filter_clause: TypeWhereClause | None = None,
-        **kwargs: dict[str, Any],
+        **kwargs: Any,  # noqa: ANN401
     ) -> BaseViewType | None:
         """
         Retrieve a single database row matching all provided key-value pairs, with optional policy and custom filtering.
@@ -86,13 +86,19 @@ class BaseView(BaseSchema):
         if _apply_policies:
             if not cls.__policy_model_class__:
                 raise ValueError("Cannot apply policies without a model class")
-            # if _apply_policies is given we apply the policies of the model class
             query = await cls.__policy_model_class__.apply_policies_to_query(query, policies=cls.__policies__ or None)
 
-        # filter by keys
+        # Map kwargs to columns in __select__ using their labels
+        label_to_column = {col._label: col for col in query.selected_columns}
         if kwargs:
-            query = query.where(and_(*(getattr(cls, key) == value for key, value in kwargs.items())))
-        # filter by custom filter clause
+            filters = []
+            for key, value in kwargs.items():
+                col = label_to_column.get(key)
+                if col is None:
+                    raise AttributeError(f"Column '{key}' not found in view select statement")
+                filters.append(col == value)
+            query = query.where(and_(*filters))
+
         if _filter_clause is not None:
             query = query.where(_filter_clause)
         result = await db.session.execute(query)
@@ -104,9 +110,7 @@ class BaseView(BaseSchema):
         cls: type[BaseViewType],
         _filter_clause: TypeWhereClause | None = None,
         _order_by: TypeOrderBy | None = None,
-        _per_page: int = -1,
-        _page: int = 1,
-        **kwargs: dict[str, Any],
+        **kwargs: Any,  # noqa: ANN401
     ) -> Sequence[BaseViewType]:
         """
         Retrieve a list of database rows with flexible filtering, ordering, and pagination.
@@ -128,8 +132,32 @@ class BaseView(BaseSchema):
             _apply_policies=True,
             _filter_clause=_filter_clause,
             _order_by=_order_by,
+            **kwargs,
+        )
+
+    @classmethod
+    async def get_paginated_list_with_policies(
+        cls: type[BaseViewType],
+        _per_page: int,
+        _page: int,
+        _filter_clause: TypeWhereClause | None = None,
+        _order_by: TypeOrderBy | None = None,
+        **kwargs: Any,  # noqa: ANN401
+    ) -> tuple[Sequence[BaseViewType], int]:
+        """
+        Retrieve a paginated list of database rows and the total count.
+        This method applies all restrictive (AND) and permissive (OR) policies defined in
+        __policies__ of the __model_class__.
+
+        Requires _per_page and _page parameters.
+        Returns a tuple: (items, total_count)
+        """
+        return await cls.get_paginated_list(
             _per_page=_per_page,
             _page=_page,
+            _apply_policies=True,
+            _filter_clause=_filter_clause,
+            _order_by=_order_by,
             **kwargs,
         )
 
@@ -139,9 +167,7 @@ class BaseView(BaseSchema):
         _apply_policies: bool = False,
         _filter_clause: TypeWhereClause | None = None,
         _order_by: TypeOrderBy | None = None,
-        _per_page: int = -1,
-        _page: int = 1,
-        **kwargs: dict[str, Any],
+        **kwargs: Any,  # noqa: ANN401
     ) -> Sequence[BaseViewType]:
         """
         Retrieve a list of database rows with flexible filtering, ordering, and pagination.
@@ -158,20 +184,82 @@ class BaseView(BaseSchema):
 
         Returns a sequence of matching rows.
         """
+        return (
+            await cls._get_list_common(
+                _apply_policies=_apply_policies,
+                _filter_clause=_filter_clause,
+                _order_by=_order_by,
+                _per_page=-1,
+                _page=1,
+                **kwargs,
+            )
+        )[0]
+
+    @classmethod
+    async def get_paginated_list(
+        cls: type[BaseViewType],
+        _per_page: int,
+        _page: int,
+        _apply_policies: bool = False,
+        _filter_clause: TypeWhereClause | None = None,
+        _order_by: TypeOrderBy | None = None,
+        **kwargs: Any,  # noqa: ANN401
+    ) -> tuple[Sequence[BaseViewType], int]:
+        """
+        Retrieve a paginated list of database rows and the total count.
+        Requires _per_page and _page parameters.
+        Returns a tuple: (items, total_count)
+        """
+        return await cls._get_list_common(
+            _apply_policies=_apply_policies,
+            _filter_clause=_filter_clause,
+            _order_by=_order_by,
+            _per_page=_per_page,
+            _page=_page,
+            **kwargs,
+        )
+
+    @classmethod
+    async def _get_list_common(
+        cls: type[BaseViewType],
+        _apply_policies: bool = False,
+        _filter_clause: TypeWhereClause | None = None,
+        _order_by: TypeOrderBy | None = None,
+        _per_page: int = -1,
+        _page: int = 1,
+        **kwargs: Any,  # noqa: ANN401
+    ) -> tuple[Sequence[BaseViewType], int]:
+        """
+        Retrieve a paginated list of database rows and the total count.
+        Returns a tuple: (items, total_count)
+        """
         query = cls.__select__
         if _apply_policies:
             if not cls.__policy_model_class__:
                 raise ValueError("Cannot apply policies without a model class")
-            # if _apply_policies is given we apply the policies of the model class
             query = await cls.__policy_model_class__.apply_policies_to_query(query, policies=cls.__policies__ or None)
 
-        # filter by keys
+        label_to_column = {col._label: col for col in query.selected_columns}
         if kwargs:
-            query = query.where(and_(*(getattr(cls, key) == value for key, value in kwargs.items())))
-        # filter by custom filter clause
+            filters = []
+            for key, value in kwargs.items():
+                col = label_to_column.get(key)
+                if col is None:
+                    raise AttributeError(f"Column '{key}' not found in view select statement")
+                filters.append(col == value)
+            query = query.where(and_(*filters))
+
         if _filter_clause is not None:
             query = query.where(_filter_clause)
 
+        if _per_page > 0:
+            # Count query
+            count_query = select(func.count()).select_from(query.subquery())
+            total = (await db.session.execute(count_query)).scalar_one()
+        else:
+            total = -1
+
+        # Pagination and ordering
         if _order_by is not None:
             query = query.order_by(*_order_by if isinstance(_order_by, list) else [_order_by])
         if _per_page > 0:
@@ -179,4 +267,5 @@ class BaseView(BaseSchema):
 
         result = await db.session.execute(query)
         rows = result.unique()
-        return [cls(**dict(zip(row._fields, row._t, strict=True))) for row in rows]
+        items = [cls(**dict(zip(row._fields, row._t, strict=True))) for row in rows]
+        return items, total
