@@ -8,7 +8,7 @@ from brickworks.core.auth.csrf import CSRFMiddleware
 from brickworks.core.auth.executioncontext import ExecutionContextMiddleware
 from brickworks.core.auth.session import SessionMiddleware
 from brickworks.core.db import DBSessionMiddleware
-from brickworks.core.models.mixins import WithGetRouteMixin
+from brickworks.core.models.mixins import WithGetRoute, WithListRoute
 from brickworks.core.module_loader import get_models_by_fqpn, get_views, load_modules
 from brickworks.core.utils.importer import import_object_from_path
 
@@ -63,14 +63,25 @@ def _add_routers(app: FastAPI, routers: list[str]) -> None:
 
 def _add_auto_routes(app: FastAPI) -> None:
     views = get_views()
-    views_with_routes = [view for view in views if issubclass(view, WithGetRouteMixin)]
-    for view in views_with_routes:
-        router = view.get_router()
+    views_with_get_routes = [view for view in views if issubclass(view, WithGetRoute)]
+    for view_with_get in views_with_get_routes:
+        router = view_with_get.get_get_router()
         app.include_router(router)
+
+    views_with_list_routes = [view for view in views if issubclass(view, WithListRoute)]
+    for view_with_list in views_with_list_routes:
+        router = view_with_list.get_list_router()
+        app.include_router(router)
+
     models = get_models_by_fqpn()
-    models_with_routes = [model for model in models.values() if issubclass(model, WithGetRouteMixin)]
-    for model in models_with_routes:
-        router = model.get_router()
+    models_with_get_routes = [model for model in models.values() if issubclass(model, WithGetRoute)]
+    for model_with_get in models_with_get_routes:
+        router = model_with_get.get_get_router()
+        app.include_router(router)
+
+    models_with_list_routes = [model for model in models.values() if issubclass(model, WithListRoute)]
+    for model_with_list in models_with_list_routes:
+        router = model_with_list.get_list_router()
         app.include_router(router)
 
 

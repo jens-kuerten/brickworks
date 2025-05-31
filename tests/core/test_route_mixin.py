@@ -4,7 +4,7 @@ from sqlalchemy.orm import aliased
 
 from brickworks.core.acl.policies import AllowPublicAccessPolicy
 from brickworks.core.models.base_view import BaseView
-from brickworks.core.models.mixins import WithGetRouteMixin
+from brickworks.core.models.mixins import WithGetRoute, WithListRoute
 from brickworks.core.models.role_model import RoleModel, user_role_table
 from brickworks.core.models.user_model import UserModel
 from tests.core.utils import create_test_user
@@ -13,7 +13,7 @@ user_alias = aliased(UserModel)
 user_role_table_alias = aliased(user_role_table)
 
 
-class RolesPerUserView(BaseView, WithGetRouteMixin):
+class RolesPerUserView(BaseView, WithGetRoute, WithListRoute):
     # define the fields of your query result
     # the field names need to match the (labeled) column names returned by the select statement
     user_name: str
@@ -35,7 +35,7 @@ class RolesPerUserView(BaseView, WithGetRouteMixin):
     )
 
 
-class TestUserModel(UserModel, WithGetRouteMixin):
+class TestUserModel(UserModel, WithGetRoute, WithListRoute):
     """
     Test UserModel with WithGetRouteMixin for testing purposes.
     """
