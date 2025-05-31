@@ -13,7 +13,7 @@ from sqlalchemy import text
 from brickworks.core import db
 from brickworks.core.constants import BASE_DIR, CORE_DIR
 from brickworks.core.db import get_db_url
-from brickworks.core.module_loader import load_models
+from brickworks.core.module_loader import load_modules
 
 logger = logging.getLogger(__name__)
 
@@ -118,7 +118,7 @@ def _migrate(schema: str = "") -> None:
 
 def make_migration(message: str | None = None) -> None:
     """Create a new database migration."""
-    load_models()
+    load_modules()
 
     if not message:
         message = get_current_git_branch()
@@ -134,7 +134,7 @@ def has_changes() -> bool:
     Check if there are any migrations to be made.
     Returns true if there are unmigrated changes.
     """
-    load_models()
+    load_modules()
     config = get_config()
     try:
         command.check(config=config)

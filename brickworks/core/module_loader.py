@@ -70,17 +70,11 @@ def load_modules() -> list[Module]:
             # import modules from loadme
             for loadme in module_json_content.loadme:
                 importlib.import_module(loadme)
+            # import models
+            with contextlib.suppress(ModuleNotFoundError):
+                importlib.import_module(module + ".models")
     logger.info(f"Loaded {len(modules)} modules: {[module.path for module in modules]}")
     return modules
-
-
-# lru cache so we don't load models if they are already loaded
-@lru_cache
-def load_models() -> None:
-    modules = load_modules()
-    for module in modules:
-        with contextlib.suppress(ModuleNotFoundError):
-            importlib.import_module(module.path + ".models")
 
 
 T = TypeVar("T")
