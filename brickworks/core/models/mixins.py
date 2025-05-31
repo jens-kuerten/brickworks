@@ -79,7 +79,7 @@ class WithGetRoute:
             return result
 
         router.add_api_route(
-            f"{cls.__routing_path__}/{{key}}",
+            f"{cls.__routing_path__}/{{{routing_get_key}}}",
             _get_by_key,
             response_model=cls | None,
             summary=f"Get a {cls.__name__} object by {cls.__routing_get_key__}",
