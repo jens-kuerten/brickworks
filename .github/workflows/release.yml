@@ -23,7 +23,7 @@ jobs:
 
   publish-docs:
     runs-on: ubuntu-latest
-    needs: ["build-and-publish"]
+    needs: ["release"]
     steps:
       - uses: actions/checkout@v4
       - name: Install uv and set the python version
