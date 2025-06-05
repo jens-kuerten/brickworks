@@ -3,6 +3,7 @@ import functools
 import hashlib
 import json
 import logging
+import pickle  # nosec
 import time
 from collections.abc import Awaitable, Callable, Set
 from dataclasses import dataclass
@@ -68,7 +69,7 @@ return result
 @dataclass
 class _CacheEntry:
     expiration_time: int
-    value: str
+    value: bytes
 
 
 @dataclass
@@ -167,11 +168,17 @@ class BrickworksCache:
 
     async def get_key(self, key: str, namespace: str = "default", master_tenant: bool = False) -> str | None:
         """Retrieves a key from the cache. If no namespace is given, the default namespace is used."""
+        value_bytes = await self.get_key_bytes(key, namespace=namespace, master_tenant=master_tenant)
+        if value_bytes is None:
+            return None
+        return value_bytes.decode("utf-8")
+
+    async def get_key_bytes(self, key: str, namespace: str = "default", master_tenant: bool = False) -> bytes | None:
+        """Retrieves a key from the cache as bytes. If no namespace is given, the default namespace is used."""
         cache_key = self._generate_key(key, namespace=namespace, master_tenant=master_tenant)
         if settings.USE_REDIS:
             res = await self._redis_client.get(cache_key)
-            return res.decode("utf-8") if res else None
-
+            return res if res else None
         cache_entry = self._memory_cache.get(cache_key)
         if cache_entry is None:
             return None
@@ -183,7 +190,7 @@ class BrickworksCache:
     async def set_key(
         self,
         key: str,
-        value: str,
+        value: str | bytes,
         namespace: str = "default",
         expire: int = 3600 * 24 * 7,
         master_tenant: bool = False,
@@ -195,7 +202,7 @@ class BrickworksCache:
         If nx is True, only set if key does not exist (like Redis SETNX).
         Returns True if the key was set, False otherwise.
         """
-        if not isinstance(value, str):
+        if not isinstance(value, str | bytes):
             raise ValueError(f"Cached value must be a string. Got {type(value)}")
 
         cache_key = self._generate_key(key, namespace=namespace, master_tenant=master_tenant)
@@ -219,7 +226,9 @@ class BrickworksCache:
                 entry = self._memory_cache.get(cache_key)
                 if nx and entry is not None and entry.expiration_time > now:
                     return False
-                self._memory_cache[cache_key] = _CacheEntry(now + expire, value)
+                self._memory_cache[cache_key] = _CacheEntry(
+                    now + expire, value.encode("utf-8") if isinstance(value, str) else value
+                )
             for index in indices or []:
                 index_key = f"__index__.{index}"
                 # Add the key to the index set
@@ -234,7 +243,7 @@ class BrickworksCache:
     async def delete_key(self, key: str, namespace: str = "default", master_tenant: bool = False) -> None:
         """Deletes a key from the cache. If no namespace is given, the default namespace is used."""
         cache_key = self._generate_key(key, namespace=namespace, master_tenant=master_tenant)
-        if await self.get_key(key, namespace, master_tenant=master_tenant) is None:
+        if await self.get_key_bytes(key, namespace, master_tenant=master_tenant) is None:
             return
         if settings.USE_REDIS:
             await self._redis_client.delete(cache_key)
@@ -401,7 +410,7 @@ class BrickworksCache:
         self, expire: int = 3600 * 24 * 7, master_tenant: bool = False
     ) -> Callable[[Callable[P, Awaitable[R]]], LruCacheWrapper[P, R]]:
         """Decorator to cache async function results using BrickworksCache.
-        Only works with JSON-serializable arguments and return values.
+        Only works with JSON-serializable arguments and pickleable return values.
         """
 
         def decorator(func: Callable[P, Awaitable[R]]) -> LruCacheWrapper[P, R]:
@@ -416,17 +425,17 @@ class BrickworksCache:
                     raise ValueError(f"Arguments to {fqpn} are not JSON serializable: {e}") from e
                 key_hash = hashlib.sha256(key_data.encode()).hexdigest()
                 cache_key = f"{fqpn}-{key_hash}"
-                cached = await self.get_key(cache_key, namespace=NAMESPACE_LRU_CACHE, master_tenant=master_tenant)
+                cached = await self.get_key_bytes(cache_key, namespace=NAMESPACE_LRU_CACHE, master_tenant=master_tenant)
                 if cached is not None:
-                    return cast(R, json.loads(cached))
+                    return cast(R, pickle.loads(cached))  # nosec
                 result = await func(*args, **kwargs)
                 try:
-                    result_json = json.dumps(result, sort_keys=True)
+                    result_pickled = pickle.dumps(result)
                 except Exception as e:
                     raise ValueError(f"Return value of {fqpn} is not JSON serializable: {e}") from e
                 await self.set_key(
                     cache_key,
-                    result_json,
+                    result_pickled,
                     namespace=NAMESPACE_LRU_CACHE,
                     expire=expire,
                     master_tenant=master_tenant,

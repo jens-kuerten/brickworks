@@ -101,7 +101,7 @@ await cache.release_distributed_lock("lock_name")
 
 ## LRU Cache Decorator
 
-You can cache the results of async functions with JSON-serializable arguments and return values:
+You can cache the results of async functions with JSON-serializable arguments and pickleable return values:
 
 ```python
 @cache.lru_cache(expire=60)
