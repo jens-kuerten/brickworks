@@ -22,6 +22,34 @@ R_co = TypeVar("R_co", covariant=True)
 NAMESPACE_LRU_CACHE = "LRU_CACHE"
 
 
+ADD_KEY_WITH_INDEXES_SCRIPT = """
+local key = KEYS[1]
+local value = ARGV[1]
+local expire = tonumber(ARGV[2])
+local index_keys = cjson.decode(ARGV[3])
+local nx = ARGV[4] == 'true'
+
+local result
+if nx then
+    result = redis.call('SET', key, value, 'EX', expire, 'NX')
+else
+    result = redis.call('SET', key, value, 'EX', expire)
+end
+for _, index_key in ipairs(index_keys) do
+    redis.call('SADD', index_key, key)
+    local current_ttl = redis.call('TTL', index_key)
+    if current_ttl < expire then
+        redis.call('EXPIRE', index_key, expire)
+    end
+end
+if result then
+    return true
+else
+    return false
+end
+"""
+
+
 @dataclass
 class _CacheEntry:
     expiration_time: int
@@ -51,6 +79,9 @@ class BrickworksCache:
                 port=settings.REDIS_PORT,
                 db=settings.REDIS_DB,
                 password=settings.REDIS_PASSWORD,
+            )
+            self._add_key_with_indexes_script = self._redis_client.register_script(
+                ADD_KEY_WITH_INDEXES_SCRIPT,
             )
         else:
             logger.warning("Using memory cache. This is not recommended for production use.")
@@ -147,7 +178,13 @@ class BrickworksCache:
 
         cache_key = self._generate_key(key, namespace=namespace, master_tenant=master_tenant)
         if settings.USE_REDIS:
-            result = await self._redis_client.set(cache_key, value, ex=expire, nx=nx)
+            index_keys = [
+                self._generate_key(f"__index__.{index}", namespace=namespace, master_tenant=master_tenant)
+                for index in indices or []
+            ]
+            args = [value, str(expire), json.dumps(index_keys or []), str(nx).lower()]
+            keys = [cache_key]
+            result = await self._add_key_with_indexes_script(keys=keys, args=args)
             if not result:
                 return False
         else:
@@ -157,8 +194,15 @@ class BrickworksCache:
                 if nx and entry is not None and entry.expiration_time > now:
                     return False
                 self._memory_cache[cache_key] = _CacheEntry(now + expire, value)
-        for index in indices or []:
-            await self.add_to_index(index, key, namespace, master_tenant=master_tenant)
+            for index in indices or []:
+                index_key = f"__index__.{index}"
+                # Add the key to the index set
+                await self.add_to_set(
+                    index_key,
+                    self._generate_key(key, namespace=namespace, master_tenant=master_tenant),
+                    namespace=namespace,
+                    master_tenant=master_tenant,
+                )
         return True
 
     async def delete_key(self, key: str, namespace: str = "default", master_tenant: bool = False) -> None:
@@ -274,31 +318,6 @@ class BrickworksCache:
             return bool(result)
         return value in self._memory_sets.get(cache_key, set())
 
-    async def add_to_index(
-        self,
-        index: str,
-        key: str,
-        namespace: str = "default",
-        master_tenant: bool = False,
-    ) -> None:
-        """Adds a key to an index and registers the index in the central index set."""
-        index_key = f"__index__.{index}"
-        # Central set of all indexes (per namespace/tenant)
-        central_index_set = "__indexes__"
-        await self.add_to_set(
-            central_index_set,
-            self._generate_key(index_key, namespace=namespace, master_tenant=master_tenant),
-            namespace="default",
-            master_tenant=master_tenant,
-        )
-        # Add the key to the index set
-        await self.add_to_set(
-            index_key,
-            self._generate_key(key, namespace=namespace, master_tenant=master_tenant),
-            namespace=namespace,
-            master_tenant=master_tenant,
-        )
-
     async def _clean_index(self, cache_key: str) -> None:
         """Removes keys from the index that don't exist anymore"""
         if settings.USE_REDIS:
@@ -316,11 +335,6 @@ class BrickworksCache:
                     self._memory_sets[cache_key].discard(key)
             if not self._memory_sets[cache_key]:
                 self._memory_sets.pop(cache_key, None)
-
-    async def clean_all_indices(self) -> None:
-        index_cache_keys = await self.get_set_members("__indexes__", namespace="default")
-        for cache_key in index_cache_keys:
-            await self._clean_index(cache_key)
 
     async def list_keys_by_index(
         self, index: str, namespace: str = "default", master_tenant: bool = False

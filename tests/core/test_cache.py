@@ -257,7 +257,11 @@ async def test_set_tenant_isolation(app: TestApp, cache_backend: TCacheBackendFi
 async def test_index_add_and_cleanup(app: TestApp, cache_backend: TCacheBackendFixture) -> None:
     # Add two keys with the same index
     await cache.set_key("k1", "v1", namespace="test", indices=["myindex"])
+    k1 = await cache.get_key("k1", namespace="test")
+    assert k1 == "v1"
     await cache.set_key("k2", "v2", namespace="test", indices=["myindex"])
+    k2 = await cache.get_key("k2", namespace="test")
+    assert k2 == "v2"
     # Both keys should be listed by index
     keys = await cache.list_keys_by_index("myindex", namespace="test")
     assert set(keys) == {"k1", "k2"}
