@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import Generator
 from unittest.mock import patch
 
@@ -22,6 +23,14 @@ async def test_set_and_get(app: TestApp, cache_backend: TCacheBackendFixture) ->
     await cache.set_key("foo", "bar")
     value = await cache.get_key("foo")
     assert value == "bar"
+
+    # test with expire
+    await cache.set_key("foo_expire", "bar_expire", expire=1)
+    value_expire = await cache.get_key("foo_expire")
+    assert value_expire == "bar_expire"
+    await asyncio.sleep(2)  # wait for expiration
+    value_expire_after = await cache.get_key("foo_expire")
+    assert value_expire_after is None  # should be expired
 
 
 async def test_set_and_get_with_tenant(app: TestApp, cache_backend: TCacheBackendFixture) -> None:
@@ -216,6 +225,29 @@ async def test_set_add_and_members(app: TestApp, cache_backend: TCacheBackendFix
 
 
 @pytest.mark.asyncio
+async def test_set_add_and_members_expire(app: TestApp, cache_backend: TCacheBackendFixture) -> None:
+    # Add to set with expiration
+    added = await cache.add_to_set("myset_expire", "a", "b", "c", expire=2)
+    assert added == 3
+    # add to set but with shorter expiration
+    await cache.add_to_set("myset_expire", "d", expire=1)
+    # Get members
+    members = await cache.get_set_members("myset_expire")
+    assert members == {"a", "b", "c", "d"}
+
+    # Wait for expiration
+    await asyncio.sleep(1.5)
+    # set is not expired yet because longest expiration is 2 seconds
+    members_after = await cache.get_set_members("myset_expire")
+    assert members_after == {"a", "b", "c", "d"}
+
+    # Should be empty after expiration
+    await asyncio.sleep(1.5)
+    members_after = await cache.get_set_members("myset_expire")
+    assert members_after == set()
+
+
+@pytest.mark.asyncio
 async def test_set_remove_and_membership(app: TestApp, cache_backend: TCacheBackendFixture) -> None:
     await cache.add_to_set("myset2", "x", "y", "z")
     # Remove one
@@ -393,8 +425,6 @@ async def test_lock_exclusive(app: TestApp, cache_backend: TCacheBackendFixture)
 
 @pytest.mark.asyncio
 async def test_lock_expiry(app: TestApp, cache_backend: TCacheBackendFixture) -> None:
-    import asyncio
-
     acquired1 = await cache.attempt_distributed_lock("lockexpire", ttl=1)
     assert acquired1 is True
     acquired2 = await cache.attempt_distributed_lock("lockexpire", ttl=1)

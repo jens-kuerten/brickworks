@@ -51,10 +51,30 @@ end
 """
 
 
+ADD_TO_SET_SCRIPT = """
+local key = KEYS[1]
+local values = cjson.decode(ARGV[1])
+local expire = tonumber(ARGV[2])
+
+local result = redis.call('SADD', key, unpack(values))
+local current_ttl = redis.call('TTL', key)
+if current_ttl < expire then
+    redis.call('EXPIRE', key, expire)
+end
+return result
+"""
+
+
 @dataclass
 class _CacheEntry:
     expiration_time: int
     value: str
+
+
+@dataclass
+class _CacheEntrySet:
+    expiration_time: int | None
+    value: set[str]
 
 
 @runtime_checkable
@@ -69,7 +89,7 @@ class BrickworksCache:
     _redis_client: Redis
     _memory_cache: dict[str, _CacheEntry] = {}
     _memory_queue: dict[str, list[str]] = {}
-    _memory_sets: dict[str, set[str]] = {}
+    _memory_sets: dict[str, _CacheEntrySet] = {}
     _memory_cache_lock: asyncio.Lock = asyncio.Lock()
     PREFIX = "brickworks"
 
@@ -84,6 +104,7 @@ class BrickworksCache:
             self._add_key_with_indexes_script = self._redis_client.register_script(
                 ADD_KEY_WITH_INDEXES_SCRIPT,
             )
+            self._add_to_set_script = self._redis_client.register_script(ADD_TO_SET_SCRIPT)
         else:
             logger.warning("Using memory cache. This is not recommended for production use.")
 
@@ -242,10 +263,25 @@ class BrickworksCache:
         Doesn't do anyting if redis is used.
         """
         if settings.USE_REDIS:
+            # redis handles expiration automatically, so we don't need to do anything here
             return
+        deleted_keys = []
         for key, cache_entry in self._memory_cache.items():
             if cache_entry.expiration_time < int(time.time()):
-                del self._memory_cache[key]
+                deleted_keys.append(key)
+        for key in deleted_keys:
+            del self._memory_cache[key]
+
+        deleted_set_keys = []
+        for key, cache_set in list(self._memory_sets.items()):
+            if cache_set.expiration_time is not None and cache_set.expiration_time < int(time.time()):
+                deleted_set_keys.append(key)
+            else:
+                # Clean up empty sets
+                if not cache_set.value:
+                    deleted_set_keys.append(key)
+        for key in deleted_set_keys:
+            self._memory_sets.pop(key, None)
 
     async def attempt_distributed_lock(self, lock_name: str, ttl: int = 10, master_tenant: bool = False) -> bool:
         """Attempts to acquire a distributed lock using Redis or in-memory cache.
@@ -266,15 +302,23 @@ class BrickworksCache:
         *values: str,
         namespace: str = "default",
         master_tenant: bool = False,
+        expire: int | None = 3600 * 24 * 7,
     ) -> int:
         """Add one or more members to a set. Returns the number of elements added."""
         cache_key = self._generate_key(key, namespace=namespace, master_tenant=master_tenant)
         if settings.USE_REDIS:
-            return await cast(Awaitable[int], self._redis_client.sadd(cache_key, *values))
-        s = self._memory_sets.setdefault(cache_key, set())
-        before = len(s)
-        s.update(values)
-        return len(s) - before
+            if expire is None:
+                return await cast(Awaitable[int], self._redis_client.sadd(cache_key, *values))
+            return int(await self._add_to_set_script(keys=[cache_key], args=[json.dumps(values), str(expire)]))
+
+        s = self._memory_sets.setdefault(
+            cache_key, _CacheEntrySet(expiration_time=int(time.time()) + expire if expire else None, value=set())
+        )
+        if expire is not None and (s.expiration_time is None or s.expiration_time < int(time.time()) + expire):
+            s.expiration_time = int(time.time()) + expire
+        before = len(s.value)
+        s.value.update(values)
+        return len(s.value) - before
 
     async def remove_from_set(
         self,
@@ -287,7 +331,7 @@ class BrickworksCache:
         cache_key = self._generate_key(key, namespace=namespace, master_tenant=master_tenant)
         if settings.USE_REDIS:
             return await cast(Awaitable[int], self._redis_client.srem(cache_key, *values))
-        s = self._memory_sets.get(cache_key, set())
+        s = self._memory_sets.get(cache_key, _CacheEntrySet(expiration_time=None, value=set())).value
         before = len(s)
         for v in values:
             s.discard(v)
@@ -307,7 +351,9 @@ class BrickworksCache:
         if settings.USE_REDIS:
             members = await cast(Awaitable[set[str]], self._redis_client.smembers(cache_key))
             return {m.decode("utf-8") if isinstance(m, bytes) else str(m) for m in members}
-        return set(self._memory_sets.get(cache_key, set()))
+        # If not using Redis, return the set from memory
+        self.delete_expired_entries()
+        return set(self._memory_sets.get(cache_key, _CacheEntrySet(expiration_time=None, value=set())).value)
 
     async def is_set_member(
         self,
@@ -321,7 +367,9 @@ class BrickworksCache:
         if settings.USE_REDIS:
             result = await cast(Awaitable[int], self._redis_client.sismember(cache_key, value))
             return bool(result)
-        return value in self._memory_sets.get(cache_key, set())
+        # If not using Redis, check the set in memory
+        self.delete_expired_entries()
+        return value in self._memory_sets.get(cache_key, _CacheEntrySet(expiration_time=None, value=set())).value
 
     async def _clean_index(self, cache_key: str) -> None:
         """Removes keys from the index that don't exist anymore"""
@@ -334,11 +382,11 @@ class BrickworksCache:
                     await cast(Awaitable[int], self._redis_client.srem(cache_key, key))
         else:
             # get all keys in the index
-            keys = self._memory_sets.get(cache_key, set()).copy()
+            keys = self._memory_sets.get(cache_key, _CacheEntrySet(expiration_time=None, value=set())).value.copy()
             for key in keys:
                 if key not in self._memory_cache:
-                    self._memory_sets[cache_key].discard(key)
-            if not self._memory_sets[cache_key]:
+                    self._memory_sets[cache_key].value.discard(key)
+            if not self._memory_sets[cache_key].value:
                 self._memory_sets.pop(cache_key, None)
 
     async def list_keys_by_index(
