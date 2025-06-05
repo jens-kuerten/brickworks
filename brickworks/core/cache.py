@@ -21,7 +21,8 @@ R_co = TypeVar("R_co", covariant=True)
 
 NAMESPACE_LRU_CACHE = "LRU_CACHE"
 
-
+# Lua script that is executed by Redis to add a key with indexes.
+# It is used to ensure that the operation is atomic
 ADD_KEY_WITH_INDEXES_SCRIPT = """
 local key = KEYS[1]
 local value = ARGV[1]
@@ -43,9 +44,9 @@ for _, index_key in ipairs(index_keys) do
     end
 end
 if result then
-    return true
+    return 1
 else
-    return false
+    return 0
 end
 """
 
@@ -178,15 +179,19 @@ class BrickworksCache:
 
         cache_key = self._generate_key(key, namespace=namespace, master_tenant=master_tenant)
         if settings.USE_REDIS:
+            if not indices:
+                # If no indices are provided, we can use a simpler SET command
+                result = await self._redis_client.set(cache_key, value, ex=expire, nx=nx)
+                return bool(result)
             index_keys = [
                 self._generate_key(f"__index__.{index}", namespace=namespace, master_tenant=master_tenant)
                 for index in indices or []
             ]
-            args = [value, str(expire), json.dumps(index_keys or []), str(nx).lower()]
-            keys = [cache_key]
-            result = await self._add_key_with_indexes_script(keys=keys, args=args)
-            if not result:
-                return False
+            # Use the Lua script to add the key with indexes atomically
+            result = await self._add_key_with_indexes_script(
+                keys=[cache_key], args=[value, str(expire), json.dumps(index_keys or []), str(nx).lower()]
+            )
+            return bool(result)
         else:
             now = int(time.time())
             async with self._memory_cache_lock:
