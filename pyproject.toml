@@ -63,6 +63,10 @@ select = [
     "T20"
 ]
 
+ignore = [
+    "UP038" # deprecated
+]
+
 [tool.mypy]
 strict = true
 ignore_missing_imports = true
