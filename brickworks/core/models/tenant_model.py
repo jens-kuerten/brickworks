@@ -13,7 +13,7 @@ from brickworks.core.settings import settings
 logger = logging.getLogger(__name__)
 
 
-@cache.lru_cache(master_tenant=True, expire=60)
+@cache.func_cache(master_tenant=True, expire=60)
 async def get_domain_schema_mapping() -> dict[str, str]:
     return await _get_domain_schema_mapping()
 
