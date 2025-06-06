@@ -107,7 +107,9 @@ class BrickworksCache:
             )
             self._add_to_set_script = self._redis_client.register_script(ADD_TO_SET_SCRIPT)
         else:
-            logger.warning("Using memory cache. This is not recommended for production use.")
+            logger.warning(
+                "Using memory cache. Do not use this for production, as this might leak memory and is not distributed!"
+            )
 
     def _generate_key(self, key: str, namespace: str, master_tenant: bool) -> str:
         tenant: str = settings.MASTER_DB_SCHEMA
