@@ -202,8 +202,8 @@ class BrickworksCache:
         If nx is True, only set if key does not exist (like Redis SETNX).
         Returns True if the key was set, False otherwise.
         """
-        if not isinstance(value, str | bytes):
-            raise ValueError(f"Cached value must be a string. Got {type(value)}")
+        if not isinstance(value, (str, bytes)):
+            raise ValueError(f"Cached value must be a string or bytes. Got {type(value)}")
 
         cache_key = self._generate_key(key, namespace=namespace, master_tenant=master_tenant)
         if settings.USE_REDIS:
