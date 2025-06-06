@@ -4,7 +4,7 @@ The `BrickworksCache` class provides a unified interface for caching in memory o
 The cache is fully async, meaning you can NOT use it from within syncronous functions!
 
 !!! warning
-    For production it is strongly advised to use Redis, because otherwise the cache is not shared between multiple replicas of your application!
+    The memory version is only ment for running tests without having Redis available. Do NOT use the memory version for production as it is not shared between multiple replicas of your application and might leak memory!
 
 The Redis connection can be configured with the following environment variables:
 
