@@ -427,12 +427,20 @@ class BrickworksCache:
                 cache_key = f"{fqpn}-{key_hash}"
                 cached = await self.get_key_bytes(cache_key, namespace=NAMESPACE_LRU_CACHE, master_tenant=master_tenant)
                 if cached is not None:
-                    return cast(R, pickle.loads(cached))  # nosec
+                    try:
+                        return cast(R, pickle.loads(cached))  # nosec
+                    except Exception as e:
+                        await self.delete_key(cache_key, namespace=NAMESPACE_LRU_CACHE, master_tenant=master_tenant)
+                        logger.error(
+                            f"Failed to deserialize cached value for {fqpn} with args {args} and kwargs {kwargs}: {e}"
+                        )
+                        # recompute the value
+
                 result = await func(*args, **kwargs)
                 try:
                     result_pickled = pickle.dumps(result)
                 except Exception as e:
-                    raise ValueError(f"Return value of {fqpn} is not JSON serializable: {e}") from e
+                    raise ValueError(f"Return value of {fqpn} is not pickle serializable: {e}") from e
                 await self.set_key(
                     cache_key,
                     result_pickled,
