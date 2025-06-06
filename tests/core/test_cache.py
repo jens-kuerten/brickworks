@@ -119,7 +119,7 @@ async def test_acquire_and_release_lock(app: TestApp, cache_backend: TCacheBacke
 async def test_lru_cache_simple(app: TestApp, cache_backend: TCacheBackendFixture) -> None:
     call_counter = {"count": 0}
 
-    @cache.lru_cache(expire=2)
+    @cache.func_cache(expire=2)
     async def add(a: int, b: int) -> int:
         call_counter["count"] += 1
         return a + b
@@ -144,7 +144,7 @@ async def test_lru_cache_simple(app: TestApp, cache_backend: TCacheBackendFixtur
 async def test_lru_cache_with_kwargs(app: TestApp, cache_backend: TCacheBackendFixture) -> None:
     call_counter = {"count": 0}
 
-    @cache.lru_cache(expire=2)
+    @cache.func_cache(expire=2)
     async def concat(a: int, b: int = 0) -> str:
         call_counter["count"] += 1
         return f"{a}-{b}"
@@ -160,7 +160,7 @@ async def test_lru_cache_with_kwargs(app: TestApp, cache_backend: TCacheBackendF
 
 @pytest.mark.asyncio
 async def test_lru_cache_json_serialization_error(app: TestApp, cache_backend: TCacheBackendFixture) -> None:
-    @cache.lru_cache(expire=2)
+    @cache.func_cache(expire=2)
     async def unserializable(arg: int) -> object:
         class NotSerializable:
             pass
@@ -175,7 +175,7 @@ async def test_lru_cache_json_serialization_error(app: TestApp, cache_backend: T
 async def test_lru_cache_tenant_isolation(app: TestApp, cache_backend: TCacheBackendFixture) -> None:
     call_counter = {"count": 0}
 
-    @cache.lru_cache(expire=2)
+    @cache.func_cache(expire=2)
     async def add(a: int, b: int) -> int:
         call_counter["count"] += 1
         return a + b
@@ -336,7 +336,7 @@ async def test_index_tenant_isolation(app: TestApp, cache_backend: TCacheBackend
 async def test_lru_cache_clear(app: TestApp, cache_backend: TCacheBackendFixture) -> None:
     call_counter = {"count": 0}
 
-    @cache.lru_cache(expire=10)
+    @cache.func_cache(expire=10)
     async def add(a: int, b: int) -> int:
         call_counter["count"] += 1
         return a + b
@@ -364,7 +364,7 @@ async def test_lru_cache_clear(app: TestApp, cache_backend: TCacheBackendFixture
 async def test_lru_cache_clear_tenant_isolation(app: TestApp, cache_backend: TCacheBackendFixture) -> None:
     call_counter = {"count": 0}
 
-    @cache.lru_cache(expire=2)
+    @cache.func_cache(expire=2)
     async def add(a: int, b: int) -> int:
         call_counter["count"] += 1
         return a + b

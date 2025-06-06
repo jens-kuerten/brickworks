@@ -1,6 +1,6 @@
 # Caching
 
-The `BrickworksCache` class provides a unified interface for caching in memory or Redis, supporting both key-value and queue-based operations, as well as distributed locking and an async LRU cache decorator.
+The `BrickworksCache` class provides a unified interface for caching in memory or Redis, supporting both key-value and queue-based operations, as well as distributed locking and an async function cache decorator.
 The cache is fully async, meaning you can NOT use it from within syncronous functions!
 
 !!! warning
@@ -99,12 +99,12 @@ Returns `True` if the lock was acquired.
 await cache.release_distributed_lock("lock_name")
 ```
 
-## LRU Cache Decorator
+## Function Cache Decorator
 
 You can cache the results of async functions with JSON-serializable arguments and pickleable return values:
 
 ```python
-@cache.lru_cache(expire=60)
+@cache.func_cache(expire=60)
 async def compute(a: int, b: int) -> int:
     ...
 ```
@@ -117,12 +117,12 @@ await compute.cache_clear()
 
 Note: the cache is only cleared for the currently active tenant!
 
-There are a few key differences between `functools.lru_cache` and Brickworks `cache.lru_cache`
+There are a few key differences between `functools.func_cache` and Brickworks `cache.func_cache`
 
 - **Tenant Awareness:** The Brickworks cache is tenant-aware, so results are isolated per tenant by default.
 - **Distributed Cache:** If enabled, the Brickworks cache is stored in Redis. This enables multiple replicas of the application to share the same cache.
 - **Time based expire:** Cached results expire automatically after a certain time. (default 1 week)
-- **Async only:** Brickworks lru_cache only works with async functions, because otherwise the async redis connection could not be used
+- **Async only:** Brickworks func_cache only works with async functions, because otherwise the async redis connection could not be used
 
 ## Indexing and Listing Keys
 
@@ -175,8 +175,8 @@ val = await cache.get_key("foo")
 await cache.push_to_queue("myqueue", "item1")
 item = await cache.pop_from_queue("myqueue")
 
-# Use the LRU cache decorator
-@cache.lru_cache(expire=120)
+# Use the func cache decorator
+@cache.func_cache(expire=120)
 async def add(a: int, b: int) -> int:
     return a + b
 result = await add(1, 2)

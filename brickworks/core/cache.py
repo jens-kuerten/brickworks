@@ -20,7 +20,7 @@ P = ParamSpec("P")  # parameters of cached function
 R = TypeVar("R")  # return type of cached function
 R_co = TypeVar("R_co", covariant=True)
 
-NAMESPACE_LRU_CACHE = "LRU_CACHE"
+NAMESPACE_FUNC_CACHE = "FUNC_CACHE"
 
 # Lua script that is executed by Redis to add a key with indexes.
 # It is used to ensure that the operation is atomic
@@ -79,7 +79,7 @@ class _CacheEntrySet:
 
 
 @runtime_checkable
-class LruCacheWrapper(Protocol[P, R_co]):
+class FuncCacheWrapper(Protocol[P, R_co]):
     def __call__(self, *args: P.args, **kwargs: P.kwargs) -> Awaitable[R_co]: ...
     async def cache_clear(self) -> None: ...
 
@@ -406,14 +406,14 @@ class BrickworksCache:
         cache_keys = await self.get_set_members(index_key, namespace, master_tenant)
         return [self._parse_key(cache_key)[2] for cache_key in cache_keys]
 
-    def lru_cache(
+    def func_cache(
         self, expire: int = 3600 * 24 * 7, master_tenant: bool = False
-    ) -> Callable[[Callable[P, Awaitable[R]]], LruCacheWrapper[P, R]]:
+    ) -> Callable[[Callable[P, Awaitable[R]]], FuncCacheWrapper[P, R]]:
         """Decorator to cache async function results using BrickworksCache.
         Only works with JSON-serializable arguments and pickleable return values.
         """
 
-        def decorator(func: Callable[P, Awaitable[R]]) -> LruCacheWrapper[P, R]:
+        def decorator(func: Callable[P, Awaitable[R]]) -> FuncCacheWrapper[P, R]:
             fqpn = f"{func.__module__}.{func.__qualname__}"
 
             @functools.wraps(func)
@@ -425,12 +425,14 @@ class BrickworksCache:
                     raise ValueError(f"Arguments to {fqpn} are not JSON serializable: {e}") from e
                 key_hash = hashlib.sha256(key_data.encode()).hexdigest()
                 cache_key = f"{fqpn}-{key_hash}"
-                cached = await self.get_key_bytes(cache_key, namespace=NAMESPACE_LRU_CACHE, master_tenant=master_tenant)
+                cached = await self.get_key_bytes(
+                    cache_key, namespace=NAMESPACE_FUNC_CACHE, master_tenant=master_tenant
+                )
                 if cached is not None:
                     try:
                         return cast(R, pickle.loads(cached))  # nosec
                     except Exception as e:
-                        await self.delete_key(cache_key, namespace=NAMESPACE_LRU_CACHE, master_tenant=master_tenant)
+                        await self.delete_key(cache_key, namespace=NAMESPACE_FUNC_CACHE, master_tenant=master_tenant)
                         logger.error(
                             f"Failed to deserialize cached value for {fqpn} with args {args} and kwargs {kwargs}: {e}"
                         )
@@ -444,7 +446,7 @@ class BrickworksCache:
                 await self.set_key(
                     cache_key,
                     result_pickled,
-                    namespace=NAMESPACE_LRU_CACHE,
+                    namespace=NAMESPACE_FUNC_CACHE,
                     expire=expire,
                     master_tenant=master_tenant,
                     indices=[fqpn],
@@ -452,9 +454,9 @@ class BrickworksCache:
                 return result
 
             async def cache_clear(master_tenant: bool = False) -> None:
-                keys = await self.list_keys_by_index(fqpn, namespace=NAMESPACE_LRU_CACHE, master_tenant=master_tenant)
+                keys = await self.list_keys_by_index(fqpn, namespace=NAMESPACE_FUNC_CACHE, master_tenant=master_tenant)
                 for key in keys:
-                    await self.delete_key(key, namespace=NAMESPACE_LRU_CACHE, master_tenant=master_tenant)
+                    await self.delete_key(key, namespace=NAMESPACE_FUNC_CACHE, master_tenant=master_tenant)
 
             wrapper.__setattr__("cache_clear", cache_clear)
             return wrapper  # type: ignore[return-value]
